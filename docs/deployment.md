@@ -390,8 +390,8 @@ See the [exact command grammar](telegram-bot-reference.md#outlet--schedule-comma
       denied; do not delete reports or schedules to work around the restriction.
 - [ ] Linked SF `/jadwal` matches current Jakarta day, `/jadwal SENIN` filters,
       `/jadwal minggu` shows an empty state if unassigned, `/jadwal semua` spans all
-      days. SF `/jadwalsales sf=test-sf-01` and `/jadwal sf=other` cannot select
-      another member. Admin/Supervisor `/jadwalsales hari=senin sf=test-sf-01` works.
+      days. SF `/jadwalsales test-sf-01` and `/jadwal sf=other` cannot select
+      another member. Admin/Supervisor `/jadwalsales test-sf-01 senin` works.
 - [ ] In a disposable **local** fixture with >50 records, copy complete next
       commands. Verify filters persist, whitespace/Unicode tokens round-trip, no
       truncation of ID tokens, readable packed messages <=4096 characters, and

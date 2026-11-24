@@ -19,7 +19,7 @@ export async function catalogPage(
         ? webDemoCatalogScope(c.get("account").id, demoOutletPredicate())
         : sql`1 = 1`;
   const where = q
-    ? sql`${scope} and instr(lower(${table.name} || ' ' || ${table.id}), lower(${q.trim()})) > 0`
+    ? sql`${scope} and instr(lower(${table.name} || ' ' || ${table.id} || ' ' || ${kind === "outlets" ? sql`coalesce(${outlets.businessId}, '') || ' ' || coalesce(${outlets.noRs}, '')` : sql`''`}), lower(${q.trim()})) > 0`
     : scope;
   const [items, totals] = await db.batch([
     db

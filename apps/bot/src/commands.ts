@@ -1,6 +1,7 @@
 import type { BotIdentityService } from "@sales-visit/contracts";
 import { type Bot } from "grammy";
 
+import { businessCommands } from "./business/commands.ts";
 import { demoCommands } from "./demo/commands.ts";
 import { outletCommands } from "./outlets/commands.ts";
 import { registerCommands } from "./registration/commands.ts";
@@ -63,6 +64,7 @@ export function installCommands(bot: Bot, api: BotIdentityService) {
   });
   outletCommands(bot, api);
   scheduleCommands(bot, api);
+  businessCommands(bot, api);
   bot.on("message:text", (ctx) =>
     ctx.reply(
       "Ketik /help untuk melihat perintah. Mulai Visit: /salesvisit. Jawaban draf memakai awalan outlet, waktu, catatan, atau tindaklanjut sesuai petunjuk; /batal untuk membatalkan."

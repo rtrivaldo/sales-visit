@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { build } from "esbuild";
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
@@ -12,7 +13,7 @@ const actor = (id) => ({
 const bundle = async (file) =>
   (
     await build({
-      entryPoints: [new URL(file, import.meta.url).pathname],
+      entryPoints: [fileURLToPath(new URL(file, import.meta.url))],
       bundle: true,
       write: false,
       format: "esm",
@@ -976,7 +977,7 @@ test("registration, authorization and verified webhook across real Worker RPC + 
               "/tambahoutlet",
               "/editoutlet",
               "/hapusoutlet",
-              "/outletinternal",
+              "/carioutlet",
               "/tambahjadwal",
             ])
               assert.match(guide, new RegExp(`^${command}(?: | —)`, "m"));

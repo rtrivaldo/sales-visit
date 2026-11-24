@@ -3,6 +3,7 @@ import { readdirSync, readFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 
 import {
   outletSchema,
@@ -437,7 +438,7 @@ test("default application rejects writes without accessing D1", async () => {
 test("read and write API against isolated local D1", async (t) => {
   const directory = mkdtempSync(join(tmpdir(), "sales-visit-api-"));
   const proxy = await getPlatformProxy({
-    configPath: new URL("../wrangler.jsonc", import.meta.url).pathname,
+    configPath: fileURLToPath(new URL("../wrangler.jsonc", import.meta.url)),
     persist: { path: directory },
   });
   t.after(async () => {

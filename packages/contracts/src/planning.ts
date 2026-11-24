@@ -125,13 +125,16 @@ export const ownScheduleFilterSchema = z
 export const scheduleFilterSchema = ownScheduleFilterSchema
   .extend({
     salesForceId: planningIdSchema.optional(),
+    salesForceCode: planningIdSchema.optional(),
     telegramUserId: telegramUserIdSchema.max(256).optional(),
   })
   .refine(
     (filter) =>
-      !(
-        filter.salesForceId !== undefined && filter.telegramUserId !== undefined
-      )
+      [
+        filter.salesForceId,
+        filter.salesForceCode,
+        filter.telegramUserId,
+      ].filter((value) => value !== undefined).length <= 1
   );
 export type OwnScheduleFilter = z.infer<typeof ownScheduleFilterSchema>;
 export type ScheduleFilter = z.infer<typeof scheduleFilterSchema>;
@@ -141,6 +144,7 @@ export type PlanningResult<T> =
       ok: false;
       code:
         | "invalid"
+        | "ambiguous"
         | "forbidden"
         | "not_found"
         | "referenced"

@@ -84,6 +84,23 @@ export class IdentityOperations {
   async me(actor: BotActor): Promise<IdentityResult<Account | null>> {
     const parsed = botActorSchema.safeParse(actor);
     if (!parsed.success) return { ok: false, code: "invalid" };
+    // Only fill unavailable metadata from the verified sender. Never alter account authority.
+    await this.db
+      .prepare(`UPDATE telegram_identities SET
+      username = coalesce(username, ?), first_name = coalesce(first_name, ?), last_name = coalesce(last_name, ?),
+      updated_at = unixepoch() * 1000
+      WHERE telegram_user_id = ? AND ((username IS NULL AND ? IS NOT NULL)
+        OR (first_name IS NULL AND ? IS NOT NULL) OR (last_name IS NULL AND ? IS NOT NULL))`)
+      .bind(
+        parsed.data.username ?? null,
+        parsed.data.firstName ?? null,
+        parsed.data.lastName ?? null,
+        parsed.data.telegramUserId,
+        parsed.data.username ?? null,
+        parsed.data.firstName ?? null,
+        parsed.data.lastName ?? null
+      )
+      .run();
     return { ok: true, data: await this.account(parsed.data.telegramUserId) };
   }
 

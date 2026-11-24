@@ -251,7 +251,11 @@ test("read-only isolation rejects all mutations and real targets; role/team scop
     "association_unavailable"
   );
   await f.login("demo-sf-01");
-  assert.equal((await f.api.listOutlets(f.actor)).code, "forbidden");
+  assert.equal((await f.api.listOutlets(f.actor)).data.items.length, 35);
+  assert.equal(
+    (await f.api.getOutlet(f.actor, { businessId: "PRIVATE" })).code,
+    "not_found"
+  );
   assert.equal((await f.api.listSchedules(f.actor)).code, "forbidden");
   assert.equal((await f.api.ownSchedule(f.actor)).data.items.length, 7);
 });

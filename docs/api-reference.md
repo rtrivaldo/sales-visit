@@ -26,7 +26,7 @@ filters ISO days; omission means all days. Admin/Supervisor may additionally use
 `salesForceId=ID`; SF is always scoped to itself and cannot supply another owner.
 Supervisor scope follows live assignments. Duplicate/unknown parameters are 400;
 missing authentication is 401; unauthorized owner selection is 403. No writes or
-Web schedule UI are introduced. `/jadwal semua` and `/jadwalsales` are the equivalent
+Web schedule UI are introduced. `/jadwal semua` and `/jadwalsales kode_sf` are the equivalent
 Bot reads; `/jadwal` alone defaults to today WIB.
 
 Demo Web outlet list/page/detail and schedule reads use the same explicit

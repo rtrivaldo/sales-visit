@@ -16,6 +16,39 @@ import {
   visitScheduleSchema,
 } from "@sales-visit/contracts";
 
+test("business SF code filters preserve zeros/case and cannot be combined with another identity", () => {
+  assert.deepEqual(
+    scheduleFilterSchema.parse({
+      salesForceCode: "SF001",
+      weekday: 1,
+      after: "page",
+    }),
+    { salesForceCode: "SF001", weekday: 1, after: "page" }
+  );
+  assert.equal(
+    scheduleFilterSchema.parse({ salesForceCode: "0001" }).salesForceCode,
+    "0001"
+  );
+  assert.equal(
+    scheduleFilterSchema.safeParse({
+      salesForceCode: "SF001",
+      salesForceId: "other",
+    }).success,
+    false
+  );
+  assert.equal(
+    scheduleFilterSchema.safeParse({
+      salesForceCode: "SF001",
+      telegramUserId: "100",
+    }).success,
+    false
+  );
+  assert.equal(
+    ownScheduleFilterSchema.safeParse({ salesForceCode: "SF001" }).success,
+    false
+  );
+});
+
 test("outlet operation inputs are strict, bounded and separate from stored models", () => {
   assert.deepEqual(
     createOutletSchema.parse({

@@ -27,6 +27,32 @@ const parse = (update) =>
     new Request("https://bot", { method: "POST", body: JSON.stringify(update) })
   );
 
+test("webhook accepts bounded Excel document updates only with a verified sender", async () => {
+  const message = {
+    message_id: 1,
+    date: 1,
+    chat: { id: 900, type: "private" },
+    from: sender,
+    caption: "/importpengguna",
+    document: {
+      file_id: "file",
+      file_unique_id: "unique",
+      file_name: "users.xlsx",
+      file_size: 100,
+    },
+  };
+  assert.equal(typeof (await parse({ update_id: 1, message })), "string");
+  for (const changed of [
+    { ...message, text: "/users" },
+    { ...message, from: { ...sender, is_bot: true } },
+    { ...message, from: undefined },
+    { ...message, document: { file_id: "" } },
+  ]) {
+    const response = await parse({ update_id: 1, message: changed });
+    assert.equal(await response.text(), "Ignored");
+  }
+});
+
 test("webhook retains secure text and unrelated callback support", async () => {
   const message = {
     update_id: 1,

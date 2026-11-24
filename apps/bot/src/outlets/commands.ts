@@ -35,7 +35,7 @@ export function outletCommands(bot: Bot, api: BotIdentityService) {
       ...(page.next ? [nextPage("/outlets ", page.next)] : []),
     ]);
   });
-  // Separate commands make legacy internal lookup explicit, even on namespace collisions.
+  // Internal mutation commands remain explicit; public detail uses business ID only.
   for (const internal of [false, true]) {
     const suffix = internal ? "internal" : "";
     const keyLabel = internal ? "INTERNAL_ID" : "BUSINESS_ID";
@@ -43,27 +43,28 @@ export function outletCommands(bot: Bot, api: BotIdentityService) {
       internal
         ? { id: decodeToken(token) }
         : { businessId: decodeToken(token) };
-    bot.command(`outlet${suffix}`, async (ctx) => {
-      const input = await parseOrUsage(
-        ctx,
-        `Format: /outlet${suffix} ${keyLabel}`,
-        () => {
-          const tokens = args(ctx.match);
-          if (tokens.length !== 1) throw new Error("args");
-          return key(tokens[0]!);
-        }
-      );
-      if (!input) return;
-      const row = await planningResult(ctx, () =>
-        api.getOutlet(actor(ctx), input)
-      );
-      if (row)
-        await replyBlocks(ctx, [
-          "DETAIL OUTLET",
-          outlet(row),
-          `Internal ID/token (Visit/Jadwal): ${displayId(row.id)}`,
-        ]);
-    });
+    if (!internal)
+      bot.command("outlet", async (ctx) => {
+        const input = await parseOrUsage(
+          ctx,
+          `Format: /outlet${suffix} ${keyLabel}`,
+          () => {
+            const tokens = args(ctx.match);
+            if (tokens.length !== 1) throw new Error("args");
+            return key(tokens[0]!);
+          }
+        );
+        if (!input) return;
+        const row = await planningResult(ctx, () =>
+          api.getOutlet(actor(ctx), input)
+        );
+        if (row)
+          await replyBlocks(ctx, [
+            "DETAIL OUTLET",
+            outlet(row),
+            `Internal ID/token (Visit/Jadwal): ${displayId(row.id)}`,
+          ]);
+      });
     bot.command(`editoutlet${suffix}`, async (ctx) => {
       const input = await parseOrUsage(
         ctx,

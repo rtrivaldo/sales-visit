@@ -1,295 +1,145 @@
-# Telegram Bot reference and implementation notes
+# Telegram Bot reference
 
-Command grammar, security boundaries, test coverage and attribution moved from the
-Bot README. For local setup and real Telegram testing, use the
-[Bot README](../apps/bot/README.md). Release/migration and deferred-scope notes below
-record feature rollout history; consult the linked current feature guides before
-planning changes or releases.
+Commands run only in private chats using the verified Telegram sender ID. `/help`
+is compact and role-aware; Demo Mode overrides the real role and hides writes.
+A = active Admin; S = active Supervisor; SF = active Sales Force.
 
-## Commands (private chat only)
+## Common and identity
 
-- `/demo`: list eligible demo accounts grouped by Admin/Supervisor/Sales Force.
-  `/demo_login account_id`: select/switch by the listed internal User ID (no buttons).
-  `/demo_status`: account and remaining hour; `/demo_logout`:
-  restore normal authentication. Local/staging opt-in only, read-only marked
-  synthetic data and existing role scopes. See [Telegram Demo Mode](telegram-demo-mode.md).
-
-- `/start`, `/help`: Indonesian welcome and compact single-message guide limited
-  to the effective role. Demo commands appear only when enabled; active Demo Mode
-  hides all disabled write/user-management commands. Short emoji headings and
-  `/command — description` lines keep it readable; only `/demo_login account_id`
-  includes an essential argument. Detailed grammar, defaults and examples remain
-  in individual command usage/error responses. See the
-  [current command parity matrix and handoff](./design/telegram-bot-parity.md).
-- `/register`: pending account from the verified update's `message.from.id`.
-- `/me`: own role, status, Telegram display snapshot and Sales Force link.
-- `/salesvisit`: active Sales Force starts/resumes a durable minimal Visit draft.
-- `/konfirmasi`: submit the reviewed draft or recover its last result safely.
-- `/batal`: discard the current uncommitted draft, from any step.
-- `/pending [KURSOR]`: active Admin, ten profiles per page; copy the next command.
-- `/approve TELEGRAM_ID admin` or `/approve TELEGRAM_ID supervisor`.
-- `/approve TELEGRAM_ID sales SALES_FORCE_ID`: `sales` maps to `sales_force`.
-  The canonical `sales_force` spelling also works. The SF ID is an existing
-  opaque business-record ID, **not** a Telegram ID or profile name.
-- `/reject TELEGRAM_ID`: active Admin rejects a pending registration.
-- `/users [KURSOR]`: active Admin lists all accounts, ten per keyset page.
+- `/start`, `/help`, `/me`: welcome, allowed commands, current identity.
+- `/register`: existing manual pending-registration flow. Imported active accounts
+  are recognized by `/start` and never need registration or another approval.
+- `/users [KURSOR] [status=active|pending|disabled|rejected]`, `/pending [KURSOR]`: Admin lists, ten per page. Users includes unlinked demo accounts, as on Web.
+- `/approve TELEGRAM_ID admin|supervisor` or
+  `/approve TELEGRAM_ID sales_force KODE_SF` (`sales` remains an alias).
+- `/reject TELEGRAM_ID`, `/disable TELEGRAM_ID`, `/enable TELEGRAM_ID`.
 - `/setrole TELEGRAM_ID admin|supervisor` or
-  `/setrole TELEGRAM_ID sales SALES_FORCE_ID` (also accepts `sales_force`):
-  active Admin changes an active account's role, with verified SF association.
-- `/disable TELEGRAM_ID`, `/enable TELEGRAM_ID`: active Admin disables an
-  active account or reactivates a disabled one, retaining role and SF link.
-  Active Admins cannot be demoted/disabled; the last active Admin is explicitly
-  protected in the transaction. Recovery requires a separately reviewed operator
-  process. Same-state repeats succeed without another audit event.
+  `/setrole TELEGRAM_ID sales_force KODE_SF`.
 
-All user-facing messages are Indonesian. **Telegram user IDs** in registration
-commands are canonical positive decimal strings (no signs, exponents or leading
-zeroes). Planning business IDs are opaque strings; see the grammar below. Names/usernames are
-optional display snapshots at first registration and are never matching keys.
-An existing registration is unchanged, including rejected/disabled accounts.
-Rejected reapplication and SF reassignment remain deferred. Role changes never
-replace an existing SF link or release it when moving to Admin/Supervisor.
-Disabled accounts retain their claims. Repeated approval/rejection decisions do
-not mutate or create another audit event; lifecycle same-state retries are no-ops.
+User administration is real Admin only. Active/protected/last Admin invariants,
+immutable reserved SF associations, audits and rejection finality are unchanged.
+Telegram IDs are positive decimal **strings**, never staff codes or usernames.
+Verify identity and SF association out of band before approval or import.
 
-**Verification policy:** the Admin must verify the person's Telegram identity
-and the intended existing SF business record out of band before approval.
-There is no verified flag or authoritative staff-verification service in the
-current schema. Explicit approval is the Admin's attestation; name matching is
-never performed. An SF already linked to any account (even disabled) cannot be
-claimed. The schema's non-unique FK is unchanged to avoid inventing a global
-cardinality/migration policy; the conditional approval transaction enforces this
-restriction for all application approval writers. Operators must not bypass it.
-Approval gives Admin/Supervisor no SF link; later role changes preserve a
-pre-existing link as a reservation, not permission to submit. Active Sales Force can submit minimal Visits
-through the private RPC wizard; public Visit/Stock Report HTTP writes still deny
-all requests.
+## Dashboard and monitoring
 
-## Outlet & Schedule command grammar
+- `/dashboard`: A/S, 14-day WIB counts, channels, daily activity and recent Visits.
+- `/salesforce [q=TOKEN] [offset=ANGKA]`: A/S, scoped directory search.
+- `/produk [q=TOKEN] [offset=ANGKA]`: all active roles, read-only product catalog.
+- `/detailsalesforce kode_sf`: exact business record detail within scope.
+- `/riwayatvisit [q=TOKEN] [salesForceId=KODE] [outletId=ID] [channel=web|telegram] [stock=with|without] [date=YYYY-MM-DD] [offset=ANGKA]`.
+- `/detailvisit visit_id`: notes, follow-up, references and linked stock reports.
+- `/stockreport [salesForceId=KODE] [outletId=ID] [offset=ANGKA]`.
 
-Private chat, active accounts only. Brackets mean optional arguments; do not type
-the brackets. Arguments are whitespace-separated; quoted strings are **not** a
-supported ID syntax. Names consume the remaining text and may contain spaces.
+Visits and stock reads are global for A, current assigned team for S, own for SF.
+Continuation commands preserve all filters. Reporting lists contain ten records.
 
-| Command                                                       | Role                                         |
-| ------------------------------------------------------------- | -------------------------------------------- |
-| `/outlets [KURSOR]`                                           | Admin, Supervisor                            |
-| `/outlet BUSINESS_ID`                                         | Admin, Supervisor                            |
-| `/outletinternal INTERNAL_ID`                                 | Admin, Supervisor; explicit legacy lookup    |
-| `/tambahoutlet BUSINESS_ID NO_RS NAMA_OUTLET`                 | Admin                                        |
-| `/editoutlet BUSINESS_ID NO_RS_BARU NAMA_OUTLET_BARU`         | Admin                                        |
-| `/hapusoutlet BUSINESS_ID KONFIRMASI`                         | Admin; literal uppercase confirmation        |
-| `/editoutletinternal INTERNAL_ID NO_RS_BARU NAMA_OUTLET_BARU` | Admin; legacy metadata/name update           |
-| `/hapusoutletinternal INTERNAL_ID KONFIRMASI`                 | Admin; same deletion protections             |
-| `/jadwal [HARI\|semua] [after=KURSOR]`                        | Sales Force; own linked business record only |
-| `/jadwalsales [hari=HARI] [sf=SALES_FORCE_ID] [after=KURSOR]` | Admin, Supervisor                            |
-| `/jadwalsales [HARI \| TELEGRAM_ID [HARI]] [after=KURSOR]`    | Admin, Supervisor                            |
-| `/tambahjadwal SALES_FORCE_ID OUTLET_ID HARI`                 | Admin                                        |
+## Outlet and recurring schedules
 
-`HARI`: senin, selasa, rabu, kamis, jumat, sabtu, minggu (case-insensitive).
-`/jadwal` defaults to today in **Asia/Jakarta**, not UTC; `/jadwal semua` shows
-all recurring days. Its follow-up command fixes the original weekday, even over
-midnight. To pass `after=`, specify the day or `semua` first.
-`/jadwalsales` defaults to all days/all SF. Its named options may be in any order,
-with each key at most once; unknown keys are rejected. Positional forms accept
-one day, one canonical decimal Telegram ID, or Telegram ID followed by day.
-Do not mix positional filters with `hari=`/`sf=`; only trailing `after=` is
-accepted with positional filters. Telegram IDs remain strings, never JS Numbers.
-The API resolves Telegram identity → active User with SF role → business SF,
-requiring exactly one account association (including reserved/disabled links).
-Missing, disabled, role-changed, unlinked or ambiguous targets return a safe
-association error, not all schedules or a guessed record. Named `sf=` still
-queries the business plan regardless of account availability. `/jadwal` rejects SF
-selection entirely. A supplied cursor cannot change the API's own-SF scope.
+| Command                                                       | Access                                                         |
+| ------------------------------------------------------------- | -------------------------------------------------------------- |
+| `/outlets [KURSOR]`                                           | A/S/SF, 50 records                                             |
+| `/carioutlet [q=TOKEN] [offset=ANGKA]`                        | A/S/SF, search                                                 |
+| `/outlet outlet_id`                                           | A/S/SF, case-insensitive **business ID**, no internal fallback |
+| `/tambahoutlet BUSINESS_ID NO_RS NAMA_OUTLET`                 | A                                                              |
+| `/editoutlet BUSINESS_ID NO_RS_BARU NAMA_OUTLET_BARU`         | A                                                              |
+| `/hapusoutlet BUSINESS_ID KONFIRMASI`                         | A; rejects referenced records                                  |
+| `/editoutletinternal INTERNAL_ID NO_RS_BARU NAMA_OUTLET_BARU` | A, retained                                                    |
+| `/hapusoutletinternal INTERNAL_ID KONFIRMASI`                 | A, retained                                                    |
+| `/jadwal [hari                                                | semua] [after=KURSOR]`                                         | SF, own; defaults today Jakarta |
+| `/jadwalsales kode_sf [hari] [after=KURSOR]`                  | A/S, S assigned team only                                      |
+| `/tambahjadwal KODE_SF INTERNAL_OUTLET_ID HARI`               | A                                                              |
 
-Examples with synthetic, simple IDs (replace Outlet IDs with actual returned IDs):
+Without arguments `/jadwalsales` displays:
 
 ```text
-/tambahoutlet 00123 00045 Toko Sintetis Jakarta
-/outlet 00123
-/editoutlet 00123 00046 Nama Baru Sintetis
-/hapusoutlet 00123 KONFIRMASI
-/tambahjadwal sf-01 out-01 senin
-/jadwal
-/jadwal MINGGU
-/jadwal semua
-/jadwalsales hari=senin sf=sf-01
-/jadwalsales 123456789 SeNiN
-/outletinternal out-01
+Format: /jadwalsales kode_sf [hari]
+
+Contoh:
+/jadwalsales SF001
+/jadwalsales SF001 senin
 ```
 
-Outlet `BUSINESS_ID` is the unique, case-sensitive business identifier; `NO_RS`
-is an opaque registration/reference string, **not a telephone number** and not
-unique. Both preserve leading zeros and exact case; 1–256 UTF-16 units, nonblank,
-no control/format characters. Creation requires both plus a name. Business ID is
-immutable through these operations. Existing records retain null fields displayed
-as **belum didata**, not invented identifiers. No backfill/import operation is
-provided; a reviewed crosswalk is needed to enrich legacy business IDs.
+SF code is mandatory and is `sales_force.id`. No Telegram-ID/day-only/named-filter
+syntax is supported. No day means **all weekdays** for that SF. Code/day matching
+is case-insensitive; leading zeros and stored spelling are preserved. Unknown or
+ambiguous codes are rejected. Indonesian days: senin, selasa, rabu, kamis, jumat,
+sabtu, minggu. Next-page commands retain SF code and weekday.
 
-**Breaking grammar change:** the old `/tambahoutlet NAMA_OUTLET` and internal-ID
-edit/delete syntax are retired, not auto-detected. Do not send an old multiword
-name as a command; the first two tokens now always mean business ID and No. RS.
-There is no name-only creation compatibility path or duplicate-record workaround.
-Internal commands are explicit and never fall back to business IDs, even if the
-same token exists in both namespaces. They can update legacy No. RS/name, not IDs.
+Outlet detail similarly accepts `OUT001`, `out001`, `Out001`. Case collisions
+produce an explicit ambiguity error, not an arbitrary record. Stored IDs are never
+normalized. No. RS is an opaque reference, not necessarily a phone number.
+Internal outlet tokens still identify immutable FKs in Visit/schedule entry.
+Schedules are recurring plans, **not completed Visits**.
 
-`OUTLET_ID` in `/tambahjadwal` and `outlet TOKEN` in the Visit wizard **remain
-internal** immutable FK targets. Schedule replies include the internal token for
-that purpose. SF IDs are business-record IDs, **not Telegram IDs**. There is no
-Bot SF lookup/provisioning command yet: obtain verified synthetic SF IDs from
-the operator. Duplicate Outlet names are allowed. Deletion is blocked by
-any Schedule, Visit or Stock Report reference; Bot never bypasses that rule.
-Schedules are weekly plans, **not completed Visits**. No schedule edit/delete,
-exceptions, effective dates or enforcement is added. The separate Visit wizard
-accepts scheduled or unscheduled known Outlet tokens. Replies show Outlet name,
-business ID/No. RS, SF name/business ID and Indonesian day. A Telegram ID is shown
-only for a unique active SF association (own SF or authorized monitoring); missing
-associations are labeled, never guessed. Schedules are business-SF-owned, not a
-historical record of Telegram-user ownership; role changes never reassign plans.
+Outlet catalog reads (outlets, carioutlet, outlet) are also available to active,
+uniquely associated SF accounts, matching Web catalog access. SF cannot modify outlets.
 
-### Exact opaque token format (planning commands and Visit Outlet entry)
+## SF and assignment management
 
-This encoding also applies to business IDs and No. RS arguments containing
-punctuation/Unicode/whitespace. No. RS is displayed as text, not dialable contact data.
+- `/tambahsalesforce kode_sf nama KONFIRMASI`.
+- `/editsalesforce kode_sf nama_baru KONFIRMASI`: changes only name;
+  shares Web optimistic-concurrency and audit guards.
+- `/hapussalesforce kode_sf KONFIRMASI`: refuses every protected reference.
+- `/supervisors [after=KURSOR]`: active Supervisor options, A only.
+- `/penugasan [q=TOKEN] [after=KURSOR]`: assignment search, A only.
+- `/assignsupervisor kode_sf supervisor_user_id KONFIRMASI`: assign/reassign.
+- `/unassignsupervisor kode_sf KONFIRMASI`: remove responsibility.
 
-- Raw token: nonempty ASCII `[A-Za-z0-9_.-]+`, validated against API limits.
-- Otherwise: `~` followed by **canonical unpadded base64url of the exact UTF-8
-  bytes**. Preserve leading/trailing whitespace, Unicode, punctuation and case;
-  never trim or normalize a decoded ID. `~` is reserved, so an ID starting with
-  `~` itself must be encoded. No `=`, `+`, `/`, or whitespace in encoded tokens.
-- Noncanonical encodings (including encoded simple IDs), invalid UTF-8, blank
-  decoded IDs, control characters, or IDs over the API's 256 UTF-16-unit limit
-  are rejected. Tokens are not credentials or secrets. Cursors use exactly this
-  same format, not Telegram user IDs or offsets.
-- Copy ID tokens and complete `Berikutnya:` commands exactly. Pages contain at
-  most 50 records; next commands retain all filters. No next command means the
-  last page. Pages are live snapshots, not a frozen export.
+No business rule is bypassed by Telegram; changes are immediately in the same D1
+used by Web. After uncertain transport failures, reconcile lists/audits before retrying.
 
-For an operator who already holds an exact synthetic SF/Outlet ID, this local
-Node.js expression produces the same token (do not use sensitive business data):
+## Excel user pre-registration (real Admin only)
+
+- `/templatepengguna`: download the blank .xlsx template with separate examples.
+- Send .xlsx document with caption `/importpengguna`: authoritative validation/preview.
+- After reviewing, re-send with `/importpengguna KONFIRMASI`; append `ADMIN` if
+  the workbook contains Admin accounts. All rows are revalidated before saving.
+- Limits: 256 KiB, 50 users, four text columns; formulas/numeric identifiers rejected.
+- All-or-nothing account, Telegram identity and audit creation. Existing accounts
+  are never overwritten/reactivated. See [import workflow](user-import.md).
+
+## Visit submission and Demo Mode
+
+`/salesvisit` starts/resumes the existing durable SF Visit wizard. Follow its
+outlet/time/notes/follow-up/optional-stock prompts; `/konfirmasi` saves or recovers
+the result; `/batal` discards an uncommitted draft. Idempotency is unchanged.
+
+Real Admins can create an unlinked demo profile with
+`/tambahakundemo admin|supervisor|sales_force TOKEN_NAMA [kode_sf] KONFIRMASI`
+when demo support is enabled. Names with spaces use the token format below.
+
+`/demo`, `/demo_login account_id`, `/demo_status`, `/demo_logout` select isolated
+local/staging read-only credentials. No real identity is linked/replaced. All new
+reads use the same marked dataset as Web, with role/assignment scope. No writes or
+real user imports are permitted. See [Demo Mode](telegram-demo-mode.md).
+
+## Exact token format
+
+Simple IDs/cursors are raw `[A-Za-z0-9_.-]+`. Other exact values (including search
+phrases with spaces) use `~` + canonical unpadded base64url UTF-8. No normalization
+or numeric conversion is performed. Example:
 
 ```js
-const id = " SF 日本 + ";
-const token = /^[A-Za-z0-9_.-]+$/.test(id)
-  ? id
-  : "~" + Buffer.from(id, "utf8").toString("base64url");
-console.log(token);
+const text = "Budi Santoso";
+console.log("~" + Buffer.from(text, "utf8").toString("base64url"));
 ```
 
-This grammar does not change `/approve` or `/pending`: approval and `/setrole`'s
-SF argument is a simple whitespace-free ID and its identity contract trims
-it; do not use planning tokens there. Linking legacy whitespace-bearing SF IDs
-requires a separately reviewed identity-contract change, not a Bot bypass.
+Copy returned IDs/continuations exactly. Pages are live, not frozen exports.
+Plain-text replies are packed/split at logical boundaries below 4096 characters.
 
-Responses use plain text, never Markdown/HTML parse mode. Record blocks are packed
-into messages of at most 4096 UTF-16 units (no message per row for normal pages).
-Names are display-truncated after 256 Unicode code points with `…`, and control/
-format characters are replaced in display labels only. IDs are never truncated:
-stored IDs outside API operation limits are explicitly marked unmanageable, and
-an unusable next cursor stops navigation with an operator message. Timestamp
-details use exact epoch milliseconds; legacy null updated time remains unknown.
+## Development release
 
-## Trust and persistence
-
-1. Bot checks the configured Telegram webhook secret before parsing/Telegram
-   calls. Bodies are bounded to 128 KiB. Only ordinary text-message updates with
-   a safe positive human sender ID are handled; unsupported updates are ignored.
-2. Private-chat middleware rejects groups before any identity RPC. Actor comes
-   only from `ctx.from.id`, not chat ID, forwarded user, username or command text.
-3. `IDENTITY` binds specifically to API `BotIdentity`, a named `WorkerEntrypoint`
-   exported by `apps/api/src/worker.ts`. It has RPC methods and no HTTP handler.
-   The default Hono fetch export has no identity routes/dispatcher. Public
-   requests and spoofed headers cannot call it; no shared-secret API endpoint
-   exists. Only Workers granted this binding should receive this capability.
-   Cloudflare account/configuration access and the Bot Worker are trusted: a
-   compromised bound Worker can impersonate actors. Binding configuration is
-   the caller capability, not a per-user permission or a caller-ID header.
-4. API validates input, resolves the actor from D1 on each protected call, and
-   checks current role/status and SF scope. Approval checks active Admin
-   permissions in the decision transaction itself. Role/status management checks
-   current actor, target transition, Admin protections and SF claims in the same
-   serialized D1 batch as audit + mutation; no client-claimed role is accepted.
-   Registration creates User + identity + audit atomically. Decisions condition
-   on pending/unassigned state and unclaimed SF; lifecycle/audit roll back
-   together. See [identity invariants and bootstrap](../packages/db/IDENTITY.md).
-
-Planning commands acknowledge processed updates even when API transport or
-Telegram delivery fails; they never automatically retry a create. An ambiguous
-failure can mean the mutation committed: reconcile `/outlets` or `/jadwalsales`
-before manually repeating it. A failed reply may leave no visible confirmation.
-There is no durable deduplication receipt: duplicate upstream deliveries can
-still create duplicate-named Outlets. This is not exactly-once processing.
-
-Telegram replies/decision notifications are not transactional with D1. Failed
-notification does not undo approval; `/me` is authoritative. For registration/approval, a transport failure
-returns retryable HTTP 500; retrying registration/decisions cannot duplicate or
-change committed decisions. Exactly-once replies/notification redelivery are not
-promised. The Visit wizard separately uses API-owned durable conversation state
-and idempotent confirmation, not planning's acknowledge-on-failure policy. Existing public
-business reads remain unchanged: use only synthetic data until read authorization
-ships. Identity/audit tables are never joined into those responses.
-
-## Automated tests versus Telegram
+Migration `0014_business_code_lookup.sql` adds only non-unique lookup indexes.
+Existing case collisions remain for manual review; no records or IDs are rewritten.
 
 ```sh
-pnpm --filter @sales-visit/api test
-pnpm --filter @sales-visit/db test
-pnpm --filter @sales-visit/contracts test
-pnpm typecheck
-pnpm check
+pnpm db:migrate:dev
+pnpm deploy:api:dev
+pnpm deploy:bot:dev
+pnpm deploy:web:dev
 ```
 
-`apps/api/tests/identity.test.mjs` bundles the actual API/Bot Workers, runs them
-in Miniflare/workerd with a real named Service Binding and disposable D1, applies
-all checked-in SQL migrations, and provisions a synthetic Admin with the exact
-bootstrap template. A test-only bound caller exercises API input validation;
-it is never bundled into app entrypoints. Tests cover idempotence, concurrent
-claims/decisions, forbidden roles/states, rollback on forced failures, audit,
-public spoofing, actual sender/private-chat enforcement and Indonesian commands.
-`bot-planning.test.mjs` additionally exercises Outlet CRUD, all roles/states,
-weekly provisioning and monitoring, deterministic Sunday-UTC/Monday-Jakarta
-own-day queries, opaque whitespace-bearing IDs/cursors, 50-row pagination,
-plain-text output, maximum Unicode IDs, legacy long names, and message bounds.
-It also verifies registration/approval regressions and acknowledged delivery
-failures. `bot-transport.test.mjs` uses a test-only faulting named RPC worker to
-verify ambiguous create failures are sanitized, acknowledged and called once.
-All planning result codes and exact 4096-unit packing boundaries have helper tests.
-`bot-visits.test.mjs` adds the real-Worker durable Visit flow, restart/persistence,
-exact IDs, authorization/link changes, duplicate/concurrent confirmation, cancel,
-TTL, failed Telegram reply and failed draft-finalization recovery. See the Visit
-guide for its test-only stale-authorization race injector.
-Only Telegram `getMe`/`sendMessage` are simulated, using synthetic credentials;
-no real Telegram/Cloudflare resource calls occur. Miniflare is pinned to the beta
-matching the repository's Wrangler/workerd compatibility date, and uses its
-provided v4-options converter. Existing Visit/Stock Report local D1 tests remain.
-Actual Telegram delivery, BotFather setup, tunnel connectivity and permission to
-message users require the separate [manual test](../apps/bot/README.md#test-messages-and-clean-up);
-they are not claimed as verified by CI or this implementation.
-
-## Attribution and deliberate differences
-
-Business command behavior and recognizable Indonesian registration/profile/
-approval UX are adapted from **rtrivaldo and the original contributors** to
-[rtrivaldo/telegram_bot](https://github.com/rtrivaldo/telegram_bot), inspected at
-`e7de4a9965b2a815160bd389a89be5fa6b1b73a7`, especially
-`src/bot/commands/auth.commands.ts`, `src/bot/bot.ts`,
-`src/services/auth.service.ts`, and `src/repositories/user.repository.ts`. Outlet/Schedule behavior additionally
-references `src/services/schedule.service.ts` (Jakarta weekday names, own versus
-monitoring views) and the backend foundation's Outlet reference checks. We use
-explicit, documented commands and opaque tokens rather than its legacy IDs.
-This is a new grammY/API/D1 implementation, not an import of Telegraf, Express,
-Node runtime, PostgreSQL or seed data. The reference declares ISC in package.json
-but has no standalone LICENSE; confirm reuse terms with its maintainer before
-production redistribution. No license permission is inferred by this PR.
-
-Security differences: private-only handling, canonical string IDs, no rejected
-reapplication, explicit verified SF association, API-owned authorization, atomic
-auditing/claims, bounded lists/body, safe errors and no raw-update/token logs.
-Deferred: OIDC/Web sessions/read authorization, Stock Report/financial reporting
-wizards, schedule editing/deletion/exceptions/effective dates, SF reassignment,
-rejected reapplication, Admin incident recovery, history, exports, financial
-measures, imports and production cutover. Migration `0005_good_puff_adder.sql`
-is already deployed; the new pending migration is `0006_windy_black_crow.sql`.
-See the exact manual checklist and teammate handoff in
-[parity and handoff](./design/telegram-bot-parity.md). No credentials,
-resources, automatic CD settings, webhook or deployment bindings change here.
+These commands target existing Development resources, never Production. Do not
+seed or reset business data. Migrate before API, then Bot and Web. See the full
+[implementation and testing notes](feature-updates-delivery.md).

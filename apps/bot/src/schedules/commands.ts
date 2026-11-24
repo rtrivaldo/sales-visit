@@ -1,7 +1,6 @@
 import {
   indonesianWeekdaySchema,
   indonesianWeekdays,
-  telegramIdSchema,
   type BotIdentityService,
   type ScheduleDetail,
   type ScheduleFilter,
@@ -67,50 +66,26 @@ export function scheduleCommands(bot: Bot, api: BotIdentityService) {
     ]);
   });
   bot.command("jadwalsales", async (ctx) => {
+    if (!ctx.match.trim()) {
+      await ctx.reply(
+        "Format: /jadwalsales kode_sf [hari]\n\nContoh:\n/jadwalsales SF001\n/jadwalsales SF001 senin"
+      );
+      return;
+    }
     const input = await parseOrUsage(
       ctx,
-      "Format: /jadwalsales [HARI | TELEGRAM_ID [HARI]] [after=KURSOR] atau /jadwalsales [hari=HARI] [sf=SALES_FORCE_ID] [after=KURSOR]",
+      "Format: /jadwalsales kode_sf [hari]\n\nContoh:\n/jadwalsales SF001\n/jadwalsales SF001 senin",
       () => {
         const filter: ScheduleFilter = {};
-        const seen = new Set<string>();
         const tokens = args(ctx.match);
-        const positional = tokens.filter((token) => !token.includes("="));
-        if (positional.length) {
-          // Only a leading positional group; continuation after= may follow.
-          if (
-            tokens[0] !== positional[0] ||
-            positional.length > 2 ||
-            tokens.slice(0, positional.length).join(" ") !==
-              positional.join(" ")
-          )
+        if (!tokens.length || tokens.length > 3) throw new Error("args");
+        filter.salesForceCode = decodeToken(tokens.shift()!);
+        if (tokens[0] && !tokens[0].startsWith("after="))
+          filter.weekday = indonesianWeekdaySchema.parse(tokens.shift());
+        if (tokens.length) {
+          if (tokens.length !== 1 || !tokens[0]!.startsWith("after="))
             throw new Error("args");
-          if (indonesianWeekdaySchema.safeParse(positional[0]).success) {
-            if (positional.length !== 1) throw new Error("args");
-            filter.weekday = indonesianWeekdaySchema.parse(positional[0]);
-          } else {
-            filter.telegramUserId = telegramIdSchema
-              .max(256)
-              .parse(positional[0]);
-            if (positional[1])
-              filter.weekday = indonesianWeekdaySchema.parse(positional[1]);
-          }
-        }
-        for (const token of tokens.slice(positional.length)) {
-          const split = token.indexOf("=");
-          const key = token.slice(0, split);
-          const value = token.slice(split + 1);
-          if (
-            split < 1 ||
-            seen.has(key) ||
-            (positional.length && key !== "after")
-          )
-            throw new Error("args");
-          seen.add(key);
-          if (key === "hari")
-            filter.weekday = indonesianWeekdaySchema.parse(value);
-          else if (key === "sf") filter.salesForceId = decodeToken(value);
-          else if (key === "after") filter.after = decodeToken(value);
-          else throw new Error("args");
+          filter.after = decodeToken(tokens[0]!.slice(6));
         }
         return filter;
       }
@@ -120,32 +95,18 @@ export function scheduleCommands(bot: Bot, api: BotIdentityService) {
       api.listSchedules(actor(ctx), input)
     );
     if (!page) return;
-    const filters = (
-      input.telegramUserId
-        ? [
-            input.telegramUserId,
-            input.weekday ? indonesianWeekdays[input.weekday - 1] : "",
-          ]
-        : [
-            input.weekday
-              ? `hari=${indonesianWeekdays[input.weekday - 1]}`
-              : "",
-            input.salesForceId ? `sf=${displayId(input.salesForceId)}` : "",
-          ]
-    )
+    const filters = [
+      displayId(input.salesForceCode!),
+      input.weekday ? indonesianWeekdays[input.weekday - 1] : "",
+    ]
       .filter(Boolean)
       .join(" ");
     await replyBlocks(ctx, [
-      `JADWAL SALES FORCE${filters ? ` — ${filters}` : ""}\nRencana berulang, bukan Visit selesai.`,
+      `JADWAL SALES FORCE — ${filters}\nRencana berulang, bukan Visit selesai.`,
       ...page.items.flatMap(schedule),
       ...(!page.items.length ? ["Tidak ada jadwal."] : []),
       ...(page.next
-        ? [
-            nextPage(
-              `/jadwalsales ${filters ? filters + " " : ""}after=`,
-              page.next
-            ),
-          ]
+        ? [nextPage(`/jadwalsales ${filters} after=`, page.next)]
         : []),
     ]);
   });

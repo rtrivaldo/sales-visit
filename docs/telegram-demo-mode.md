@@ -33,7 +33,7 @@ With an already configured **dedicated test bot**, in private chat:
    authentication token). `/me` and `/help` reflect the selected role. `/demo_status` reports
    its internal User ID, role and remaining minutes. `/me`'s Telegram ID remains
    the verified sender, not a Telegram identity belonging to the demo account.
-3. Admin/Supervisor: `/outlets`, `/outletinternal TOKEN`, `/jadwalsales`.
+3. Admin/Supervisor: `/outlets`, `/outlet BUSINESS_ID`, `/jadwalsales kode_sf`, `/dashboard`, `/riwayatvisit`, `/stockreport`.
    Supervisor schedule queries retain current team-assignment scope.
 4. Sales Force: `/jadwal semua` reads only its own synthetic schedules;
    monitoring/Admin commands remain forbidden.
@@ -123,26 +123,25 @@ outlet list/page/detail reads now apply them to demo accounts, keeping linked
 normal users' existing access and response shapes. `ScheduleOperations` and the
 same D1 policies/query builder serve both the Bot and additive authenticated
 `GET /schedules` (there was no Web schedules endpoint/UI in this repository).
-No Web UI rewrite or copied schedule dataset is introduced. Web reporting and
-management features are otherwise unchanged.
+No Web UI rewrite or copied schedule dataset is introduced. Reporting reads now also require marked SF provenance for unlinked demo accounts.
+New Bot business reads use the same Web query services; user import is never available to demo accounts.
 
 Equivalent reads for the same account:
 
-| Telegram                        | Authenticated Web API                      |
-| ------------------------------- | ------------------------------------------ |
-| SF `/jadwal semua`              | `GET /schedules`                           |
-| SF `/jadwal senin`              | `GET /schedules?weekday=1`                 |
-| Admin/Supervisor `/jadwalsales` | `GET /schedules`                           |
-| `/jadwalsales sf=demo-sf-01`    | `GET /schedules?salesForceId=demo-sf-01`   |
-| `/outlets`                      | `GET /outlets` or `GET /outlets?view=page` |
-| `/outletinternal demo-out-01`   | `GET /outlets/demo-out-01`                 |
+| Telegram                  | Authenticated Web API                                          |
+| ------------------------- | -------------------------------------------------------------- |
+| SF `/jadwal semua`        | `GET /schedules`                                               |
+| SF `/jadwal senin`        | `GET /schedules?weekday=1`                                     |
+| `/jadwalsales demo-sf-01` | `GET /schedules?salesForceId=demo-sf-01`                       |
+| `/outlets`                | `GET /outlets` or `GET /outlets?view=page`                     |
+| `/outlet DEMO-OUT-001`    | `GET /outlets/demo-out-01` (use its actual stored business ID) |
 
 `/schedules` returns `{items,next}`, at most 50 rows per page; use `after=ID` to
 continue. No weekday filter means all days; `/jadwal` alone defaults to today WIB.
 SF cannot select another owner. Supervisor plans remain limited to current team
 assignments. SF's existing permitted `/jadwal` already contains Outlet names,
-business IDs, No. RS and internal IDs for its own plans; monitoring-only Bot
-Outlet commands remain monitoring-only. Missing/unclassified rows yield empty
+business IDs, No. RS and internal IDs for its own plans; Bot Outlet catalog commands now allow active uniquely associated SF accounts too,
+matching Web catalog access; mutations remain real Admin only. Missing/unclassified rows yield empty
 lists/404, never fabricated data or a fallback to real records.
 
 Default local API/Bot configs share `sales-visit-api` and API-local `sales-visit` D1.

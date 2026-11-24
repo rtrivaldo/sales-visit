@@ -5,11 +5,17 @@ import {
   type Account,
   type BotIdentityService,
   type IdentityResult,
+  type UserPage,
 } from "@sales-visit/contracts";
 import { Bot, type Context } from "grammy";
 
 import { actor } from "../actor.ts";
-import { label, replyBlocks } from "../planning/shared.ts";
+import {
+  label,
+  replyBlocks,
+  decodeToken,
+  displayId,
+} from "../planning/shared.ts";
 import { helpSections } from "./help.ts";
 
 const approvalUsage =
@@ -81,10 +87,15 @@ export function registerCommands(bot: Bot, api: BotIdentityService) {
       [
         "Halo! Selamat datang di Sales Visit Bot.",
         "",
-        "Gunakan /register untuk mendaftarkan akun.",
+        ...(!response.data
+          ? ["Gunakan /register untuk mendaftarkan akun."]
+          : []),
         "Gunakan /me untuk melihat profil.",
         "Gunakan /help untuk melihat panduan.",
-        "Gunakan /salesvisit untuk membuat laporan kunjungan (Sales Force aktif).",
+        ...(response.data?.status === "active" &&
+        response.data.role === "sales_force"
+          ? ["Gunakan /salesvisit untuk membuat laporan kunjungan."]
+          : []),
         "",
         statusMessage(response.data),
         "Layanan hanya melalui chat pribadi.",
@@ -100,7 +111,7 @@ export function registerCommands(bot: Bot, api: BotIdentityService) {
     // me() resolves demo before real authentication; status supplies the live
     // feature gate and selected role without modifying the session.
     const demo = await api.demoStatus(actor(ctx));
-    await ctx.reply(helpSections(response.data, demo).join("\n\n"));
+    await replyBlocks(ctx, helpSections(response.data, demo));
   });
   bot.command("me", async (ctx) => {
     const response = await api.me(actor(ctx));
@@ -132,26 +143,50 @@ export function registerCommands(bot: Bot, api: BotIdentityService) {
   });
   bot.command("users", async (ctx) => {
     const args = ctx.match.trim().split(/\s+/).filter(Boolean);
-    if (args.length > 1) {
-      await ctx.reply("Format: /users [KURSOR]");
+    let after = "",
+      status = "";
+    try {
+      for (const token of args) {
+        if (token.startsWith("status=")) {
+          if (status) throw new Error("args");
+          status = token.slice(7);
+          if (!["active", "pending", "disabled", "rejected"].includes(status))
+            throw new Error("args");
+        } else {
+          if (after) throw new Error("args");
+          after = decodeToken(token);
+        }
+      }
+    } catch {
+      await ctx.reply(
+        "Format: /users [KURSOR] [status=active|pending|disabled|rejected]"
+      );
       return;
     }
-    const page = await result(ctx, await api.users(actor(ctx), args[0]));
-    if (!page) return;
+    const response = await api.business(actor(ctx), {
+      path: `/admin/users?limit=10&after=${encodeURIComponent(after)}&status=${status}`,
+    });
+    if (!response.ok) {
+      await ctx.reply(response.error);
+      return;
+    }
+    const page = response.data as UserPage;
     await replyBlocks(ctx, [
-      page.accounts.length
-        ? "DAFTAR PENGGUNA"
-        : "Belum ada pengguna terdaftar.",
-      ...page.accounts.map((account) =>
+      page.items.length ? "DAFTAR PENGGUNA" : "Belum ada pengguna terdaftar.",
+      ...page.items.map((account) =>
         [
-          `Nama: ${label([account.firstName, account.lastName].filter(Boolean).join(" ")) || "-"}`,
+          `Nama: ${label(account.displayName ?? [account.firstName, account.lastName].filter(Boolean).join(" ")) || "-"}`,
           `Telegram ID: ${account.telegramUserId}`,
           `Role: ${account.role ?? "-"}`,
           `Status: ${account.status}`,
           `Sales Force ID: ${label(account.salesForceId ?? "-")}`,
         ].join("\n")
       ),
-      ...(page.next ? [`Berikutnya: /users ${page.next}`] : []),
+      ...(page.next
+        ? [
+            `Berikutnya: /users ${displayId(page.next)}${status ? ` status=${status}` : ""}`,
+          ]
+        : []),
     ]);
   });
   bot.command("setrole", async (ctx) => {

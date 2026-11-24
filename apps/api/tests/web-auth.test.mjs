@@ -3,6 +3,7 @@ import { readdirSync, readFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from "jose";
 import { getPlatformProxy } from "wrangler";
@@ -155,7 +156,7 @@ test("JWT timestamps retain 30s skew and 5m maximum age", async (t) => {
 test("Web sessions and authorized reads on disposable local D1", async (t) => {
   const dir = mkdtempSync(join(tmpdir(), "web-auth-"));
   const proxy = await getPlatformProxy({
-    configPath: new URL("../wrangler.jsonc", import.meta.url).pathname,
+    configPath: fileURLToPath(new URL("../wrangler.jsonc", import.meta.url)),
     persist: { path: dir },
   });
   t.after(async () => {

@@ -25,6 +25,8 @@ const webActorCte = `WITH actor AS (
 )`;
 const policies = {
   admin: "EXISTS (SELECT 1 FROM actor WHERE role = 'admin')",
+  catalog:
+    "EXISTS (SELECT 1 FROM actor WHERE role IN ('admin', 'supervisor') OR (role = 'sales_force' AND salesForceId IS NOT NULL AND (SELECT count(*) FROM users claimant WHERE claimant.sales_force_id = actor.salesForceId) = 1))",
   monitoring:
     "EXISTS (SELECT 1 FROM actor WHERE role IN ('admin', 'supervisor'))",
   own: "EXISTS (SELECT 1 FROM actor WHERE role = 'sales_force' AND salesForceId IS NOT NULL)",

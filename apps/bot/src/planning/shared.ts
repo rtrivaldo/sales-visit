@@ -56,13 +56,15 @@ export async function replyBlocks(ctx: Context, blocks: string[]) {
 }
 const errors = {
   invalid: "Parameter tidak valid. Ketik /help untuk format perintah.",
+  ambiguous:
+    "Kode ambigu: beberapa data memiliki kode yang sama tanpa membedakan huruf besar/kecil. Hubungi Admin.",
   forbidden: "Akses ditolak. Periksa role dan status aktif melalui /me.",
   not_found: "Outlet tidak ditemukan.",
   referenced:
     "Outlet masih dirujuk Jadwal, Visit, atau Stock Report; tidak dapat dihapus.",
   duplicate: "ID bisnis Outlet atau penugasan yang sama sudah ada.",
   association_unavailable:
-    "Asosiasi Telegram ke Sales Force aktif tidak ditemukan atau tidak unik. Hubungi Admin; gunakan filter sf= hanya untuk rencana bisnis yang terverifikasi.",
+    "Asosiasi Sales Force aktif tidak ditemukan atau tidak unik. Hubungi Admin.",
   reference_not_found:
     "Sales Force atau Outlet tidak ditemukan. Periksa ID bisnis yang dipilih.",
   unavailable:

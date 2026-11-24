@@ -30,10 +30,10 @@ export function helpSections(
   if (role === "admin" || role === "supervisor")
     sections.push(
       section("📅 Monitoring", [
-        "/jadwalsales — Lihat jadwal Sales Force sesuai akses.",
+        "/jadwalsales kode_sf [hari] — Jadwal Sales Force.",
         "/outlets — Daftar Outlet.",
         "/outlet — Lihat detail Outlet.",
-        "/outletinternal — Cari Outlet berdasarkan ID internal.",
+        "/carioutlet — Cari Outlet.",
       ])
     );
   if (role === "admin" && !readOnly) {
@@ -46,6 +46,8 @@ export function helpSections(
         "/setrole — Ubah role pengguna aktif.",
         "/disable — Nonaktifkan pengguna.",
         "/enable — Aktifkan kembali pengguna.",
+        "/templatepengguna — Template Excel pengguna.",
+        "/importpengguna — Impor pengguna aktif.",
       ])
     );
     sections.push(
@@ -57,6 +59,57 @@ export function helpSections(
         "/hapusoutletinternal — Hapus Outlet berdasarkan ID internal.",
         "/tambahjadwal — Tambah rencana kunjungan.",
       ])
+    );
+  }
+  if (role === "admin" || role === "supervisor") {
+    sections.push(
+      section("📊 Dashboard", ["/dashboard — Ringkasan aktivitas."])
+    );
+    sections.push(
+      section("👨‍💼 Sales Force", [
+        "/salesforce — Cari Sales Force.",
+        "/detailsalesforce — Detail Sales Force.",
+        ...(role === "admin" && !readOnly
+          ? [
+              "/tambahsalesforce — Tambah Sales Force.",
+              "/editsalesforce — Ubah nama Sales Force.",
+              "/hapussalesforce — Hapus Sales Force tanpa referensi.",
+            ]
+          : []),
+      ])
+    );
+  }
+  if (role === "admin")
+    sections.push(
+      section("🤝 Penugasan Supervisor", [
+        "/supervisors — Daftar Supervisor.",
+        "/penugasan — Cari penugasan.",
+        ...(!readOnly
+          ? [
+              "/assignsupervisor — Tetapkan atau ganti Supervisor.",
+              "/unassignsupervisor — Lepaskan penugasan.",
+            ]
+          : []),
+      ])
+    );
+  if (role) {
+    sections.push(section("📦 Produk", ["/produk — Cari katalog produk."]));
+    if (role === "sales_force")
+      sections.push(
+        section("🏪 Outlet", [
+          "/outlets — Daftar Outlet.",
+          "/carioutlet — Cari Outlet.",
+          "/outlet — Lihat detail Outlet.",
+        ])
+      );
+    sections.push(
+      section("📋 Riwayat Kunjungan", [
+        "/riwayatvisit — Cari riwayat sesuai akses.",
+        "/detailvisit — Detail kunjungan.",
+      ])
+    );
+    sections.push(
+      section("📦 Laporan Stok", ["/stockreport — Laporan stok sesuai akses."])
     );
   }
   if (role === "sales_force") {
@@ -81,6 +134,9 @@ export function helpSections(
         "/demo_login account_id — Pilih atau ganti akun demo (hanya baca).",
         "/demo_status — Lihat akun demo dan sisa sesi.",
         "/demo_logout — Keluar demo dan pulihkan akses Telegram.",
+        ...(role === "admin" && !readOnly
+          ? ["/tambahakundemo — Buat akun demo Web dan Bot."]
+          : []),
       ])
     );
   return sections;

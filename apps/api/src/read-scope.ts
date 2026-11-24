@@ -16,7 +16,10 @@ export function operationalScope(
     | ReturnType<typeof sql>
 ) {
   return sql`exists (select 1 from users scope_user
-    where scope_user.id = ${userId} and scope_user.status = 'active' and (
+    where scope_user.id = ${userId} and scope_user.status = 'active'
+    and (exists (select 1 from telegram_identities scope_identity where scope_identity.user_id = scope_user.id)
+      or exists (select 1 from sales_force demo_owner where demo_owner.id = ${owner} and demo_owner.demo_only = 1))
+    and (
       scope_user.role = 'admin'
       or (scope_user.role = 'supervisor' and exists (
         select 1 from sales_force_supervisors scope_assignment

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { build } from "esbuild";
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
@@ -8,7 +9,7 @@ import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 async function bundle(path, banner = "") {
   return (
     await build({
-      entryPoints: [new URL(path, import.meta.url).pathname],
+      entryPoints: [fileURLToPath(new URL(path, import.meta.url))],
       bundle: true,
       write: false,
       format: "esm",
@@ -254,10 +255,13 @@ test("Telegram planning commands through actual BotIdentity binding and disposab
   await t.test(
     "roles, inactive users, private chats and spoofed identity",
     async () => {
-      for (const id of [3, 4, 5, 6, 999]) {
+      for (const id of [4, 5, 6, 999]) {
         assert.match(await command(id, "/outlets"), /Akses ditolak/);
         assert.match(await command(id, "/outlet absent"), /Akses ditolak/);
-        assert.match(await command(id, "/jadwalsales"), /Akses ditolak/);
+        assert.match(
+          await command(id, `/jadwalsales ${enc(sf)}`),
+          /Akses ditolak/
+        );
       }
       assert.match(await command(1, "/outlets"), /Tidak ada Outlet/);
       assert.match(await command(2, "/outlets"), /Tidak ada Outlet/);
@@ -277,6 +281,12 @@ test("Telegram planning commands through actual BotIdentity binding and disposab
       for (const id of [1, 2, 4, 5, 6, 999])
         assert.match(await command(id, "/jadwal"), /Akses ditolak/);
       assert.match(await command(3, "/jadwal"), /Tidak ada jadwal/);
+      assert.match(await command(3, "/outlets"), /Tidak ada Outlet/);
+      assert.match(await command(3, "/outlet absent"), /tidak ditemukan/);
+      assert.match(
+        await command(3, `/jadwalsales ${enc(sf)}`),
+        /Akses ditolak/
+      );
     }
   );
   await t.test("Outlet CRUD, opaque lookup and guarded delete", async () => {
@@ -329,13 +339,12 @@ test("Telegram planning commands through actual BotIdentity binding and disposab
       /tidak ditemukan/
     );
     await db
-      .prepare("INSERT INTO outlets (id, name) VALUES (?, ?)")
+      .prepare(
+        "INSERT INTO outlets (id, name, business_id) VALUES (?, ?, 'OUT001')"
+      )
       .bind(" outlet 😀 + ", "Unicode Outlet")
       .run();
-    assert.match(
-      await command(2, `/outletinternal ${enc(" outlet 😀 + ")}`),
-      /Unicode Outlet/
-    );
+    assert.match(await command(2, "/outlet out001"), /Unicode Outlet/);
     for (const text of [
       "/outlet",
       "/outlet ~bad=",
@@ -375,11 +384,11 @@ test("Telegram planning commands through actual BotIdentity binding and disposab
         assert.match(await command(3, `/jadwal ${day}`), /Tidak ada jadwal/);
       for (const id of [1, 2]) {
         assert.match(
-          await command(id, `/jadwalsales sf=${enc(sf)} hari=senin`),
+          await command(id, `/jadwalsales ${enc(sf)} senin`),
           /Unicode Outlet/
         );
         assert.match(
-          await command(id, `/jadwalsales sf=${enc(sf)} hari=selasa`),
+          await command(id, `/jadwalsales ${enc(sf)} selasa`),
           /Tidak ada jadwal/
         );
       }
@@ -403,46 +412,37 @@ test("Telegram planning commands through actual BotIdentity binding and disposab
     }
   );
   await t.test(
-    "positional Telegram ID and weekdays coexist with explicit named SF filters",
+    "mandatory business code, optional case-insensitive weekday and rejected legacy filters",
     async () => {
       for (const by of [1, 2]) {
-        for (const query of [
-          "3",
-          "3 SeNiN",
-          "SeNiN",
-          `sf=${enc(sf)} hari=SeNiN`,
-        ])
+        assert.match(
+          await command(by, "/jadwalsales"),
+          /Format: \/jadwalsales kode_sf \[hari\]/
+        );
+        for (const query of [enc(sf), `${enc(sf)} SeNiN`])
           assert.match(
             await command(by, `/jadwalsales ${query}`),
             /Unicode Outlet/
           );
         assert.match(
-          await command(by, "/jadwalsales 3 SELASA"),
+          await command(by, `/jadwalsales ${enc(sf)} SELASA`),
           /Tidak ada jadwal/
         );
         for (const query of [
-          "03",
-          "0",
-          "+3",
-          "3.0",
-          "3e0",
-          "senin selasa",
+          "sf=other",
+          "hari=senin",
           "3 hari=senin",
           "3 sf=other",
-          "hari=senin 3",
           "3 senin selasa",
           "3 senin after=x after=y",
         ])
           assert.match(await command(by, `/jadwalsales ${query}`), /Format/);
-        assert.match(
-          await command(by, "/jadwalsales 999"),
-          /Asosiasi Telegram/
-        );
+        assert.match(await command(by, "/jadwalsales 999"), /tidak ditemukan/);
+        assert.match(await command(by, "/jadwalsales 3"), /tidak ditemukan/);
       }
-      assert.match(await command(3, "/jadwalsales 3 senin"), /Akses ditolak/);
       assert.match(
-        await command(2, `/outletinternal ${enc(" outlet 😀 + ")}`),
-        /belum didata/
+        await command(3, `/jadwalsales ${enc(sf)} senin`),
+        /Akses ditolak/
       );
     }
   );
@@ -482,19 +482,15 @@ test("Telegram planning commands through actual BotIdentity binding and disposab
       assert.doesNotMatch(result, /Berikutnya/);
       for (const [id, initial] of [
         [3, "/jadwal"],
-        [2, `/jadwalsales hari=senin sf=${enc(sf)}`],
-        [2, "/jadwalsales 3 SeNiN"],
+        [2, `/jadwalsales ${enc(sf)} senin`],
+        [2, `/jadwalsales ${enc(sf)} SeNiN`],
       ]) {
         result = await command(id, initial);
         assert.doesNotMatch(result, /RAHASIA SF LAIN/);
         next = result.match(/Berikutnya: (\/[^\n]+)/)[1];
         assert.match(
           next,
-          id === 3
-            ? /\/jadwal senin after=/
-            : initial.includes(" 3 ")
-              ? /\/jadwalsales 3 senin after=/
-              : /hari=senin sf=.+ after=/
+          id === 3 ? /\/jadwal senin after=/ : /\/jadwalsales \S+ senin after=/
         );
         result = await command(id, next);
         assert.doesNotMatch(result, /RAHASIA SF LAIN|Berikutnya/);
@@ -539,7 +535,7 @@ test("Telegram planning commands through actual BotIdentity binding and disposab
         )
         .bind(longSf)
         .run();
-      const text = await command(2, `/jadwalsales sf=${enc(longSf)}`);
+      const text = await command(2, `/jadwalsales ${enc(longSf)}`);
       assert.ok(text.includes(enc(longSf)) && text.includes(enc(longOutlet)));
       assert.ok(sent.length <= 2);
       assert.match(text, /…/);
@@ -559,6 +555,37 @@ test("Telegram planning commands through actual BotIdentity binding and disposab
           await db
             .prepare(
               "SELECT count(*) AS n FROM outlets WHERE name = 'Delivery failed but committed'"
+            )
+            .first()
+        ).n,
+        1
+      );
+      // Same users + telegram_identities architecture used by the Excel importer.
+      await db
+        .prepare(
+          "INSERT INTO users(id,status,role,display_name) VALUES ('pre-registered','active','supervisor','Imported Name')"
+        )
+        .run();
+      await db
+        .prepare(
+          "INSERT INTO telegram_identities(user_id,telegram_user_id) VALUES ('pre-registered','699')"
+        )
+        .run();
+      const welcome = await command(699, "/start");
+      assert.match(welcome, /aktif dengan role supervisor/);
+      assert.doesNotMatch(welcome, /Gunakan \/register|menunggu persetujuan/);
+      const importedProfile = await command(699, "/me");
+      assert.match(importedProfile, /Synthetic/);
+      assert.match(importedProfile, /Role: supervisor/);
+      assert.match(
+        await command(699, "/register"),
+        /aktif dengan role supervisor/
+      );
+      assert.equal(
+        (
+          await db
+            .prepare(
+              "SELECT count(*) AS n FROM telegram_identities WHERE telegram_user_id = '699'"
             )
             .first()
         ).n,

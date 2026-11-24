@@ -12,6 +12,9 @@ export class BotIdentity
   private service() {
     return botService(this.env);
   }
+  business(actor: BotActor, input: unknown) {
+    return this.service().business(actor, input);
+  }
   demoAccounts(actor: BotActor) {
     return this.service().demoAccounts(actor);
   }

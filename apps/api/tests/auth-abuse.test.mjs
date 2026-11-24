@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { getPlatformProxy } from "wrangler";
 
@@ -7,7 +8,7 @@ import { createApp } from "../src/index.ts";
 
 test("Wrangler exposes usable native local rate bindings without remote resources", async (t) => {
   const proxy = await getPlatformProxy({
-    configPath: new URL("../wrangler.jsonc", import.meta.url).pathname,
+    configPath: fileURLToPath(new URL("../wrangler.jsonc", import.meta.url)),
     persist: false,
   });
   t.after(() => proxy.dispose());

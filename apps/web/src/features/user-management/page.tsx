@@ -37,6 +37,7 @@ import { roleLabel, useAccount } from "@/features/auth/session";
 import { AccountAction } from "./action-dialog";
 import { accountName, statusLabels } from "./data";
 import { DemoAccountDialog } from "./demo-dialog";
+import { ImportUsersDialog } from "./import-dialog";
 import { OperationOutcome } from "./operation-outcome";
 
 function UserTable({
@@ -182,8 +183,8 @@ export function UserManagementPage() {
           Pengguna &amp; Akses
         </h1>
         <p className="text-muted-foreground text-sm">
-          Tinjau registrasi Telegram dan kelola akses akun. Identitas Telegram
-          tidak dapat dibuat atau diganti di sini.
+          Tinjau registrasi Telegram, impor pengguna aktif, dan kelola akses
+          akun. Identitas akun yang sudah ada tidak dapat diganti.
         </p>
         <Link to="/supervisor-assignments" className="text-sm underline">
           Kelola Penugasan Supervisor
@@ -192,6 +193,7 @@ export function UserManagementPage() {
       <p role="status" aria-live="polite">
         {message}
       </p>
+      <ImportUsersDialog />
       <DemoAccountDialog onMessage={setMessage} />
       <OperationOutcome onMessage={setMessage} />
       <section className="flex flex-col gap-4" aria-labelledby="pending-title">

@@ -1,12 +1,13 @@
 import type { BotActor, BotIdentityService } from "@sales-visit/contracts";
 
+import { botBusiness } from "./bot-business.ts";
 import { IdentityOperations } from "./identity.ts";
 import { OutletOperations } from "./outlets.ts";
 import { ScheduleOperations } from "./schedules.ts";
 import { TelegramDemo } from "./telegram-demo.ts";
 import { VisitWizard } from "./visits/wizard.ts";
 
-type Env = { DB: D1Database; APP_ENV?: string; DEMO_AUTH_ENABLED?: string };
+type Env = ApiBindings;
 // Sole RPC actor routing point. No caller-supplied demo account, role or mode.
 // All mutating commands (including registration and Visit drafts) fail closed in
 // Demo Mode; only dedicated credential operations may write demo session tables.
@@ -28,6 +29,7 @@ export function botService(env: Env): BotIdentityService {
       : real();
   }
   return {
+    business: (actor, input) => botBusiness(env, actor, input),
     demoAccounts: (actor) => demo.accounts(actor),
     demoLogin: (actor, accountId) => demo.login(actor, accountId),
     demoStatus: (actor) => demo.status(actor),

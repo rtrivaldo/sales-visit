@@ -4,6 +4,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { build } from "esbuild";
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
@@ -13,7 +14,7 @@ import { hashToken } from "../src/web-auth.ts";
 async function bundle(path, banner = "") {
   return (
     await build({
-      entryPoints: [new URL(path, import.meta.url).pathname],
+      entryPoints: [fileURLToPath(new URL(path, import.meta.url))],
       bundle: true,
       write: false,
       format: "esm",

@@ -47,7 +47,7 @@ export class OutletOperations {
     const result = await planningBatch(
       this.db,
       actor,
-      "monitoring",
+      "catalog",
       (guard) => [
         {
           sql: `SELECT ${fields} FROM outlets WHERE id > ? AND ${this.demo ? demoOutletPredicate() + " AND" : ""} ${guard} ORDER BY id LIMIT 51`,
@@ -77,16 +77,18 @@ export class OutletOperations {
     const result = await planningBatch(
       this.db,
       actor,
-      "monitoring",
+      "catalog",
       (guard) => [
         {
-          sql: `SELECT ${fields} FROM outlets WHERE ${selected.column} = ? AND ${this.demo ? demoOutletPredicate() + " AND" : ""} ${guard}`,
+          sql: `SELECT ${fields} FROM outlets WHERE ${selected.column} = ? ${selected.column === "business_id" ? "COLLATE NOCASE" : ""} AND ${this.demo ? demoOutletPredicate() + " AND" : ""} ${guard} LIMIT 2`,
           values: [selected.value],
         },
       ],
       this.demo
     );
     if (!result.ok) return result;
+    if (result.data[0]!.results.length > 1)
+      return { ok: false, code: "ambiguous" };
     const row = outletDetailSchema.optional().parse(result.data[0]!.results[0]);
     return row ? { ok: true, data: row } : { ok: false, code: "not_found" };
   }

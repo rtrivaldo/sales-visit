@@ -22,6 +22,7 @@ import { operationalScope } from "./read-scope.ts";
 import { toStockReport } from "./records.ts";
 import { salesForceManagementRoutes } from "./sales-force-management.ts";
 import { supervisorAssignmentRoutes } from "./supervisor-assignments.ts";
+import { userImportRoutes } from "./user-import.ts";
 import { listVisits, validReadQuery, visitDetail } from "./visit-reads.ts";
 import { authRoutes, sessionAccount, type WebEnv } from "./web-auth.ts";
 import { webSchedules } from "./web-schedules.ts";
@@ -67,6 +68,7 @@ export function createApp(
     await next();
   });
   app.route("/auth", authRoutes(telegramKeys));
+  app.route("/admin/user-import", userImportRoutes());
   app.route("/admin/users", adminUserRoutes());
   app.route("/admin/sales-force", salesForceManagementRoutes());
   app.route("/admin/outlets", outletManagementRoutes());
@@ -151,6 +153,19 @@ export function createApp(
       orderBy: (table, { asc }) => [asc(table.id)],
     });
     return c.json(rows);
+  });
+
+  app.get("/sales-force/:id", async (c) => {
+    const row = await createDb(c.env.DB).query.salesForce.findFirst({
+      columns: { id: true, name: true },
+      where: (table, { and, eq }) =>
+        and(
+          eq(table.id, c.req.param("id")!),
+          operationalScope(c.get("account").id, table.id),
+          webDemoCatalogScope(c.get("account").id, "salesForce.demo_only = 1")
+        ),
+    });
+    return row ? c.json(row) : c.json({ error: "Not found" }, 404);
   });
 
   app.get("/outlets", async (c) => {

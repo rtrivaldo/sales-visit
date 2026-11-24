@@ -1,6 +1,8 @@
 import { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 
+import { demoEligibility } from "./demo-auth.ts";
+import { isDemoAccount } from "./demo-data.ts";
 import { hashToken, sessionAccount, type WebEnv } from "./web-auth.ts";
 
 const validId = (value: unknown): value is string =>
@@ -18,7 +20,7 @@ const adminGuard = `EXISTS (SELECT 1 FROM web_sessions session JOIN users actor 
     AND actor.status = 'active' AND actor.role = 'admin')`;
 const assignmentFields = `sf.id AS salesForceId, sf.name AS salesForceName,
   assignment.supervisor_user_id AS supervisorUserId,
-  coalesce(identity.first_name, supervisor.display_name, supervisor.id) AS supervisorName,
+  coalesce(supervisor.display_name, nullif(trim(coalesce(identity.first_name, '') || ' ' || coalesce(identity.last_name, '')), ''), supervisor.id) AS supervisorName,
   supervisor.status AS supervisorStatus, supervisor.role AS supervisorRole`;
 const assignmentFrom = `FROM sales_force sf
   LEFT JOIN sales_force_supervisors assignment ON assignment.sales_force_id = sf.id
@@ -27,7 +29,11 @@ const assignmentFrom = `FROM sales_force sf
 
 export function supervisorAssignmentRoutes() {
   const app = new Hono<WebEnv>();
-  for (const path of ["/supervisors", "/supervisor-assignments"]) {
+  for (const path of [
+    "/supervisors",
+    "/supervisor-assignments",
+    "/supervisor-assignment-groups",
+  ]) {
     app.use(path, async (c, next) => {
       const account = await sessionAccount(c.req.raw, c.env.DB);
       if (!account) return c.json({ error: "Unauthorized" }, 401);
@@ -46,15 +52,16 @@ export function supervisorAssignmentRoutes() {
 
   app.get("/supervisors", async (c) => {
     const after = c.req.query("after") ?? "";
+    const demo = await isDemoAccount(c.env.DB, c.get("account").id);
     if (after && !validId(after))
       return c.json({ error: "Invalid request" }, 400);
     const hash = await hashToken(c.req.header("Authorization")!.slice(7));
     const now = Date.now();
     const [permission, rows] = await c.env.DB.batch([
       c.env.DB.prepare(`SELECT 1 WHERE ${adminGuard}`).bind(hash, now),
-      c.env.DB.prepare(`SELECT u.id, coalesce(t.first_name, u.display_name, u.id) AS name FROM users u
+      c.env.DB.prepare(`SELECT u.id, coalesce(u.display_name, nullif(trim(coalesce(t.first_name, '') || ' ' || coalesce(t.last_name, '')), ''), u.id) AS name FROM users u
         LEFT JOIN telegram_identities t ON t.user_id = u.id
-        WHERE u.status = 'active' AND u.role = 'supervisor' AND u.id > ? AND ${adminGuard}
+        WHERE u.status = 'active' AND u.role = 'supervisor' AND u.id > ? AND ${demo ? demoEligibility + " AND" : ""} ${adminGuard}
         ORDER BY u.id LIMIT 101`).bind(after, hash, now),
     ]);
     if (!permission!.results.length) return c.json({ error: "Forbidden" }, 403);
@@ -66,11 +73,71 @@ export function supervisorAssignmentRoutes() {
     });
   });
 
+  app.get("/supervisor-assignment-groups", async (c) => {
+    const q = (c.req.query("q") ?? "").trim(),
+      after = c.req.query("after") ?? "";
+    if (q.length > 200 || after.length > 1024 || c.req.url.length > 16384)
+      return c.json({ error: "Invalid request" }, 400);
+    const demo = await isDemoAccount(c.env.DB, c.get("account").id);
+    const hash = await hashToken(c.req.header("Authorization")!.slice(7)),
+      now = Date.now();
+    const groups = await c.env.DB.prepare(`WITH groups AS (
+      SELECT '1' || u.id AS cursor, u.id AS supervisorUserId, coalesce(u.display_name, nullif(trim(coalesce(t.first_name, '') || ' ' || coalesce(t.last_name, '')), ''), u.id) AS supervisorName,
+        u.status AS supervisorStatus, u.role AS supervisorRole FROM users u
+      LEFT JOIN telegram_identities t ON t.user_id = u.id
+      WHERE (u.role = 'supervisor' OR EXISTS (SELECT 1 FROM sales_force_supervisors a WHERE a.supervisor_user_id = u.id))
+        ${demo ? `AND (${demoEligibility})` : ""}
+      UNION ALL SELECT '0', NULL, 'Belum Ditugaskan', NULL, NULL
+    ) SELECT *, (SELECT count(*) FROM sales_force sf LEFT JOIN sales_force_supervisors a ON a.sales_force_id = sf.id
+      WHERE a.supervisor_user_id IS groups.supervisorUserId ${demo ? "AND sf.demo_only = 1" : ""}) AS total
+      FROM groups WHERE cursor > ? AND (? = '' OR instr(lower(supervisorName), lower(?)) > 0 OR EXISTS (
+        SELECT 1 FROM sales_force sf LEFT JOIN sales_force_supervisors a ON a.sales_force_id = sf.id
+        WHERE a.supervisor_user_id IS groups.supervisorUserId ${demo ? "AND sf.demo_only = 1" : ""} AND instr(lower(sf.name), lower(?)) > 0))
+      AND ${adminGuard} ORDER BY cursor LIMIT 11`)
+      .bind(after, q, q, q, hash, now)
+      .all();
+    const items = groups.results.slice(0, 10);
+    // Teams use their own bounded member pagination; never load an unbounded team.
+    const teams = items.length
+      ? await c.env.DB.batch<Record<string, string | number | null>>(
+          items.map((group) =>
+            c.env.DB.prepare(`SELECT ${assignmentFields} ${assignmentFrom}
+      WHERE assignment.supervisor_user_id IS ? ${demo ? "AND sf.demo_only = 1" : ""}
+      AND (? = '' OR instr(lower(?), lower(?)) > 0 OR instr(lower(sf.name), lower(?)) > 0)
+      AND ${adminGuard} ORDER BY sf.id LIMIT 101`).bind(
+              group.supervisorUserId,
+              q,
+              group.supervisorName,
+              q,
+              q,
+              hash,
+              now
+            )
+          )
+        )
+      : [];
+    return c.json({
+      items: items.map((group, i) => ({
+        ...group,
+        members: teams[i]!.results.slice(0, 100),
+        next:
+          teams[i]!.results.length > 100
+            ? teams[i]!.results[99]!.salesForceId
+            : null,
+      })),
+      next: groups.results.length > 10 ? items.at(-1)!.cursor : null,
+    });
+  });
+
   app.get("/supervisor-assignments", async (c) => {
     const after = c.req.query("after") ?? "";
     const limit = c.req.query("limit") ?? "50";
+    const q = (c.req.query("q") ?? "").trim();
+    const group = c.req.query("group");
+    const demo = await isDemoAccount(c.env.DB, c.get("account").id);
     if (
       c.req.url.length > 16384 ||
+      q.length > 200 ||
       !/^\d{1,3}$/.test(limit) ||
       Number(limit) < 1 ||
       Number(limit) > 100
@@ -86,8 +153,15 @@ export function supervisorAssignmentRoutes() {
         `SELECT 1 WHERE (? = '' OR EXISTS (SELECT 1 FROM sales_force WHERE id = ?)) AND ${adminGuard}`
       ).bind(after, after, hash, now),
       c.env.DB.prepare(`SELECT ${assignmentFields} ${assignmentFrom}
-        WHERE sf.id > ? AND ${adminGuard} ORDER BY sf.id LIMIT ?`).bind(
+        WHERE sf.id > ? AND (? = 0 OR assignment.supervisor_user_id IS ?) AND ${demo ? "sf.demo_only = 1 AND" : ""}
+        (? = '' OR instr(lower(coalesce(supervisor.display_name, nullif(trim(coalesce(identity.first_name, '') || ' ' || coalesce(identity.last_name, '')), ''), supervisor.id, 'Belum Ditugaskan')), lower(?)) > 0 OR instr(lower(sf.name), lower(?)) > 0)
+        AND ${adminGuard} ORDER BY sf.id LIMIT ?`).bind(
         after,
+        group === undefined ? 0 : 1,
+        group || null,
+        q,
+        q,
+        q,
         hash,
         now,
         Number(limit) + 1

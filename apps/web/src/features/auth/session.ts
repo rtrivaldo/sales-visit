@@ -36,13 +36,15 @@ export class SessionExpiredError extends Error {
 }
 export class ApiError extends Error {
   readonly status: number;
-  constructor(status: number) {
+  readonly details: unknown;
+  constructor(status: number, details: unknown = null) {
     super(
       status === 403
         ? "Akses tidak diizinkan."
         : "Layanan tidak tersedia. Silakan coba lagi."
     );
     this.status = status;
+    this.details = details;
   }
 }
 const base = import.meta.env.VITE_API_URL as string | undefined;
@@ -73,7 +75,15 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
     }
     throw new SessionExpiredError();
   }
-  if (!response.ok) throw new ApiError(response.status);
+  if (!response.ok) {
+    let details: unknown = null;
+    try {
+      details = await response.json();
+    } catch {
+      /* Non-JSON failures retain the generic message. */
+    }
+    throw new ApiError(response.status, details);
+  }
   return response.json() as Promise<T>;
 }
 export async function restoreSession() {

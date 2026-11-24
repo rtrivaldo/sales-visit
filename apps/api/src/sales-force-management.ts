@@ -93,6 +93,7 @@ export function salesForceManagementRoutes() {
   app.get("/", async (c) => {
     const after = c.req.query("after") ?? "";
     const q = c.req.query("q") ?? "";
+    const exact = c.req.query("id") ?? "";
     const limit = c.req.query("limit") ?? "25";
     if (
       c.req.url.length > 16384 ||
@@ -110,9 +111,11 @@ export function salesForceManagementRoutes() {
       c.env.DB.prepare(`SELECT sf.id, sf.name, sf.created_at AS createdAt, ${referenceProjection},
         (SELECT group_concat(status, ', ') FROM users WHERE sales_force_id = sf.id) AS accountStatus,
         (SELECT supervisor_user_id FROM sales_force_supervisors WHERE sales_force_id = sf.id) AS supervisorUserId
-        FROM sales_force sf WHERE (? = '' OR sf.id > ?) AND
+        FROM sales_force sf WHERE (? = '' OR sf.id = ?) AND (? = '' OR sf.id > ?) AND
         (? = '' OR instr(lower(sf.id), lower(?)) > 0 OR instr(lower(sf.name), lower(?)) > 0)
         AND ${webAdminGuard} ORDER BY sf.id LIMIT ?`).bind(
+        exact,
+        exact,
         after,
         after,
         q,

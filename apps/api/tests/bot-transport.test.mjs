@@ -1,12 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { build } from "esbuild";
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
 
 test("ambiguous create RPC transport failure is acknowledged without retry or raw error leakage", async (t) => {
   const bundle = await build({
-    entryPoints: [new URL("../../bot/src/index.ts", import.meta.url).pathname],
+    entryPoints: [
+      fileURLToPath(new URL("../../bot/src/index.ts", import.meta.url)),
+    ],
     bundle: true,
     write: false,
     format: "esm",

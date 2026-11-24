@@ -18,6 +18,7 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "@/components/ui/empty";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -47,6 +48,15 @@ type Assignment = {
   supervisorRole: string | null;
 };
 type Page<T> = { items: T[]; next: string | null };
+type Group = Pick<
+  Assignment,
+  "supervisorUserId" | "supervisorName" | "supervisorStatus" | "supervisorRole"
+> & {
+  cursor: string;
+  total: number;
+  members: Assignment[];
+  next: string | null;
+};
 
 async function supervisorOptions() {
   const items: Supervisor[] = [];
@@ -204,7 +214,16 @@ export function AssignmentsPage() {
   const account = useAccount();
   const [after, setAfter] = useState("");
   const [revision, setRevision] = useState(0);
-  const [data, setData] = useState<Page<Assignment> | null>(null);
+  const [data, setData] = useState<Page<Group> | null>(null);
+  const [search, setSearch] = useState("");
+  const [query, setQuery] = useState("");
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setAfter("");
+      setQuery(search.trim());
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [search]);
   const [supervisors, setSupervisors] = useState<Supervisor[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -218,8 +237,8 @@ export function AssignmentsPage() {
     setLoading(true);
     setError("");
     void Promise.all([
-      api<Page<Assignment>>(
-        `/supervisor-assignments?limit=50&after=${encodeURIComponent(after)}`
+      api<Page<Group>>(
+        `/supervisor-assignment-groups?after=${encodeURIComponent(after)}&q=${encodeURIComponent(query)}`
       ),
       supervisorOptions(),
     ])
@@ -244,7 +263,7 @@ export function AssignmentsPage() {
     return () => {
       cancelled = true;
     };
-  }, [account?.role, after, revision]);
+  }, [account?.role, after, revision, query]);
   if (account?.role !== "admin")
     return (
       <p role="alert">Akses tidak diizinkan. Halaman ini hanya untuk Admin.</p>
@@ -261,22 +280,14 @@ export function AssignmentsPage() {
     setError("");
     setMessage("");
     try {
-      const updated = await api<Assignment>("/supervisor-assignments", {
+      await api<Assignment>("/supervisor-assignments", {
         method: "PUT",
         body: JSON.stringify({
           salesForceId: row.salesForceId,
           supervisorUserId,
         }),
       });
-      setData(
-        (current) =>
-          current && {
-            ...current,
-            items: current.items.map((item) =>
-              item.salesForceId === updated.salesForceId ? updated : item
-            ),
-          }
-      );
+      setRevision((value) => value + 1);
       setMessage(`Penugasan ${row.salesForceName} berhasil disimpan.`);
     } catch {
       setNeedsReload(true);
@@ -297,6 +308,13 @@ export function AssignmentsPage() {
         Kelola akses pemantauan Sales Force. Penugasan berlaku untuk seluruh
         riwayat aktivitas.
       </p>
+      <Input
+        aria-label="Cari nama Supervisor atau Sales Force"
+        placeholder="Cari nama Supervisor atau Sales Force..."
+        value={search}
+        disabled={busy}
+        onChange={(event) => setSearch(event.target.value)}
+      />
       {error && <p role="alert">{error}</p>}
       <p role="status" aria-live="polite">
         {busy ? "Menyimpan penugasan…" : message}
@@ -320,9 +338,15 @@ export function AssignmentsPage() {
             {!data.items.length ? (
               <Empty>
                 <EmptyHeader>
-                  <EmptyTitle>Belum ada Sales Force</EmptyTitle>
+                  <EmptyTitle>
+                    {query
+                      ? "Tidak ada hasil pencarian"
+                      : "Belum ada penugasan"}
+                  </EmptyTitle>
                   <EmptyDescription>
-                    Tambahkan master Sales Force sebelum mengatur penugasan.
+                    {query
+                      ? "Coba nama lain atau kosongkan pencarian."
+                      : "Tambahkan master Sales Force sebelum mengatur penugasan."}
                   </EmptyDescription>
                 </EmptyHeader>
                 <Button
@@ -339,27 +363,95 @@ export function AssignmentsPage() {
                 </Button>
               </Empty>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Sales Force</TableHead>
-                    <TableHead>Supervisor saat ini</TableHead>
-                    <TableHead>Penugasan baru</TableHead>
-                    <TableHead>Tindakan</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {data.items.map((row) => (
-                    <AssignmentRow
-                      key={`${revision}:${row.salesForceId}`}
-                      row={row}
-                      supervisors={supervisors}
-                      busy={busy || needsReload}
-                      onSave={save}
-                    />
-                  ))}
-                </TableBody>
-              </Table>
+              <div className="flex flex-col gap-8">
+                {data.items.map((group) => (
+                  <section
+                    key={group.cursor}
+                    className="flex flex-col gap-3"
+                    aria-label={group.supervisorName ?? "Belum Ditugaskan"}
+                  >
+                    <h2 className="text-lg font-semibold">
+                      {group.supervisorUserId
+                        ? `Supervisor: ${group.supervisorName}`
+                        : "Belum Ditugaskan"}
+                    </h2>
+                    <p className="text-muted-foreground text-sm">
+                      Total Sales Force: {group.total}
+                    </p>
+                    {group.supervisorUserId &&
+                      (group.supervisorStatus !== "active" ||
+                        group.supervisorRole !== "supervisor") && (
+                        <p className="text-muted-foreground text-sm">
+                          Supervisor tidak tersedia untuk pemantauan.
+                        </p>
+                      )}
+                    {!group.members.length ? (
+                      <p className="text-muted-foreground text-sm">
+                        Belum ada Sales Force.
+                      </p>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Sales Force</TableHead>
+                            <TableHead>Supervisor saat ini</TableHead>
+                            <TableHead>Penugasan baru</TableHead>
+                            <TableHead>Tindakan</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {group.members.map((row) => (
+                            <AssignmentRow
+                              key={`${revision}:${row.salesForceId}`}
+                              row={row}
+                              supervisors={supervisors}
+                              busy={busy || needsReload}
+                              onSave={save}
+                            />
+                          ))}
+                        </TableBody>
+                      </Table>
+                    )}
+                    {group.next && (
+                      <Button
+                        variant="outline"
+                        disabled={busy}
+                        onClick={() => {
+                          setBusy(true);
+                          setError("");
+                          void api<Page<Assignment>>(
+                            `/supervisor-assignments?limit=100&group=${encodeURIComponent(group.supervisorUserId ?? "")}&q=${encodeURIComponent(query)}&after=${encodeURIComponent(group.next!)}`
+                          )
+                            .then((page) => {
+                              setData(
+                                (current) =>
+                                  current && {
+                                    ...current,
+                                    items: current.items.map((item) =>
+                                      item.cursor === group.cursor
+                                        ? {
+                                            ...item,
+                                            members: [
+                                              ...item.members,
+                                              ...page.items,
+                                            ],
+                                            next: page.next,
+                                          }
+                                        : item
+                                    ),
+                                  }
+                              );
+                            })
+                            .catch(() => setError("Gagal memuat anggota tim."))
+                            .finally(() => setBusy(false));
+                        }}
+                      >
+                        Muat anggota berikutnya
+                      </Button>
+                    )}
+                  </section>
+                ))}
+              </div>
             )}
             {!supervisors.length && (
               <Empty>

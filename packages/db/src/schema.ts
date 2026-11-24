@@ -28,6 +28,7 @@ export const salesForce = sqliteTable(
   },
   (table) => [
     check("sales_force_demo_only", sql`${table.demoOnly} IN (0,1)`),
+    index("sales_force_id_nocase_idx").on(sql`${table.id} COLLATE NOCASE`),
     check("sales_force_id_nonblank", sql`length(trim(${table.id})) > 0`),
     check("sales_force_name_nonblank", sql`length(trim(${table.name})) > 0`),
   ]
@@ -411,6 +412,9 @@ export const outlets = sqliteTable(
   (table) => [
     check("outlets_demo_only", sql`${table.demoOnly} IN (0,1)`),
     unique("outlets_business_id_unique").on(table.businessId),
+    index("outlets_business_id_nocase_idx").on(
+      sql`${table.businessId} COLLATE NOCASE`
+    ),
     check("outlets_id_nonblank", sql`length(trim(${table.id})) > 0`),
     check("outlets_name_nonblank", sql`length(trim(${table.name})) > 0`),
   ]

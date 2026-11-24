@@ -3,6 +3,7 @@ import { z } from "zod";
 import type { BotPlanningService } from "./planning.ts";
 import type { BotVisitService } from "./visit-wizard.ts";
 
+export const accountRoleSchema = z.enum(["admin", "supervisor", "sales_force"]);
 export const telegramIdSchema = z.string().regex(/^[1-9][0-9]*$/);
 export const botActorSchema = z
   .object({
@@ -50,6 +51,10 @@ export type BotDemoResult =
   | { ok: true; data: { account: DemoAccount; expiresAt: number } | null };
 export interface BotIdentityService
   extends BotPlanningService, BotVisitService {
+  business(
+    actor: BotActor,
+    input: unknown
+  ): Promise<{ ok: true; data: unknown } | { ok: false; error: string }>;
   demoAccounts(
     actor: BotActor
   ): Promise<{ ok: false } | { ok: true; items: DemoAccount[] }>;

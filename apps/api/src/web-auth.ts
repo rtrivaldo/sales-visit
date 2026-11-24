@@ -95,7 +95,7 @@ export async function liveAccount(
 ): Promise<WebAccount | null> {
   const row = await db
     .prepare(`SELECT u.id, u.role, u.sales_force_id AS salesForceId,
-    CASE WHEN t.user_id IS NOT NULL THEN coalesce(t.first_name, 'Akun Telegram')
+    CASE WHEN t.user_id IS NOT NULL THEN coalesce(t.first_name, u.display_name, 'Akun Telegram')
       ELSE trim(u.display_name) END AS name FROM users u
     LEFT JOIN telegram_identities t ON t.user_id = u.id
     WHERE u.id = ? AND u.status = 'active' AND u.role IN ('admin','supervisor','sales_force')

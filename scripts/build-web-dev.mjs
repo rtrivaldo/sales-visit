@@ -6,6 +6,7 @@ const apiUrl =
 
 const result = spawnSync("pnpm", ["--filter", "@sales-visit/web", "build"], {
   stdio: "inherit",
+  shell: process.platform === "win32",
   env: {
     ...process.env,
     VITE_API_URL: apiUrl,

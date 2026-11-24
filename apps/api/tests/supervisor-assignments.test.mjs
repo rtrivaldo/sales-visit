@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { build } from "esbuild";
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
@@ -34,7 +35,7 @@ const actor = (id) => ({ telegramUserId: telegram[id] });
 
 async function setup(t) {
   const bundle = await build({
-    entryPoints: [new URL("../src/worker.ts", import.meta.url).pathname],
+    entryPoints: [fileURLToPath(new URL("../src/worker.ts", import.meta.url))],
     bundle: true,
     write: false,
     format: "esm",

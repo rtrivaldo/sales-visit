@@ -23,7 +23,17 @@ const message = z
   .object({
     message_id: z.number().int().safe().positive(),
     date: z.number().int().safe().nonnegative(),
-    text: z.string(),
+    text: z.string().optional(),
+    caption: z.string().max(1024).optional(),
+    document: z
+      .object({
+        file_id: z.string().min(1).max(1024),
+        file_unique_id: z.string().min(1).max(256),
+        file_name: z.string().max(256).optional(),
+        file_size: z.number().int().safe().nonnegative().optional(),
+      })
+      .passthrough()
+      .optional(),
     chat: chat.refine((value) => value.type !== "channel"),
     from: sender,
     entities: z
@@ -38,7 +48,8 @@ const message = z
       )
       .optional(),
   })
-  .passthrough();
+  .passthrough()
+  .refine((value) => (typeof value.text === "string") !== !!value.document);
 const callback = z
   .object({
     id: z.string().min(1).max(256),

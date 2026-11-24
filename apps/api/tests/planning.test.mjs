@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { build } from "esbuild";
 import { Miniflare, convertV4MiniflareOptions } from "miniflare";
@@ -13,7 +14,7 @@ const newOutlet = (name) => ({
 });
 async function setup(t, legacy = false) {
   const bundle = await build({
-    entryPoints: [new URL("../src/worker.ts", import.meta.url).pathname],
+    entryPoints: [fileURLToPath(new URL("../src/worker.ts", import.meta.url))],
     bundle: true,
     write: false,
     format: "esm",
@@ -1108,7 +1109,7 @@ test("authorized Outlet CRUD over named RPC with migrated local D1", async (t) =
     (await rpc("createOutlet", 1, newOutlet("Toko sintetis"))).ok,
     true
   ); // names are labels, not unique keys
-  for (const by of [3, 4, 5, 6, 7, 8, 9, 999]) {
+  for (const by of [3, 5, 6, 7, 8, 9, 999]) {
     assert.equal((await rpc("listOutlets", by, {})).code, "forbidden");
     assert.equal((await rpc("getOutlet", by, { id })).code, "forbidden");
   }

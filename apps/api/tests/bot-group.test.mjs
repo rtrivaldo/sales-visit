@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { build } from "esbuild";
 
@@ -8,7 +9,7 @@ import { build } from "esbuild";
 const bundle = await build({
   stdin: {
     contents: `export { Bot } from 'grammy'; export { installCommands } from './commands.ts';`,
-    resolveDir: new URL("../../bot/src/", import.meta.url).pathname,
+    resolveDir: fileURLToPath(new URL("../../bot/src/", import.meta.url)),
   },
   bundle: true,
   write: false,

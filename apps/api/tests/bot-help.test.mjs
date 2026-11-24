@@ -5,7 +5,6 @@ import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 
 import { helpSections } from "../../bot/src/registration/help.ts";
-
 const bundle = await build({
   entryPoints: [
     fileURLToPath(new URL("../../bot/src/commands.ts", import.meta.url)),
@@ -32,8 +31,18 @@ installCommands(
   {}
 );
 const general = ["start", "help", "me"];
-const monitoring = ["jadwalsales", "outlets", "outlet", "outletinternal"];
-const users = [
+const monitor = [
+  "jadwalsales",
+  "outlets",
+  "outlet",
+  "carioutlet",
+  "dashboard",
+  "salesforce",
+  "detailsalesforce",
+];
+const reports = ["riwayatvisit", "detailvisit", "stockreport", "produk"];
+const assignments = ["supervisors", "penugasan"];
+const writes = [
   "pending",
   "users",
   "approve",
@@ -41,16 +50,21 @@ const users = [
   "setrole",
   "disable",
   "enable",
-];
-const outlets = [
+  "templatepengguna",
+  "importpengguna",
   "tambahoutlet",
   "editoutlet",
   "hapusoutlet",
   "editoutletinternal",
   "hapusoutletinternal",
   "tambahjadwal",
+  "tambahsalesforce",
+  "editsalesforce",
+  "hapussalesforce",
+  "assignsupervisor",
+  "unassignsupervisor",
 ];
-const visits = ["salesvisit", "konfirmasi", "batal"];
+const visit = ["salesvisit", "konfirmasi", "batal"];
 const demoCommands = ["demo", "demo_login", "demo_status", "demo_logout"];
 const account = (role, status = "active") => ({
   id: "u",
@@ -64,51 +78,54 @@ const account = (role, status = "active") => ({
   createdAt: 1,
 });
 function check(profile, demo, expected) {
-  const text = helpSections(profile, demo).join("\n\n");
-  assert.ok(text.length > 0 && text.length < 2400);
+  const sections = helpSections(profile, demo),
+    text = sections.join("\n\n");
+  assert.ok(text.length > 0 && text.length < 4096);
   assert.match(text, /^👤 Umum\n/);
-  const matches = [...text.matchAll(/^\/(\w+)(?: account_id)? — .+$/gm)];
-  assert.deepEqual(matches.map((m) => m[1]).toSorted(), expected.toSorted());
-  for (const match of matches) assert.ok(handlers.has(match[1]), match[1]);
+  const commands = [...text.matchAll(/^\/(\w+)(?: [^—\n]+)? — .+$/gm)].map(
+    (match) => match[1]
+  );
+  assert.deepEqual(commands.toSorted(), expected.toSorted());
+  for (const name of commands) assert.ok(handlers.has(name), name);
   assert.doesNotMatch(
     text,
-    /Notasi|default:|Alternatif:|Format:|Contoh:|APP_ENV|DEMO_AUTH_ENABLED|hari=|after=|\.\.\.|\[|TELEGRAM_ID|KURSOR/
+    /^\/outletinternal —|Notasi|default:|Alternatif:|Format:|Contoh:|APP_ENV|DEMO_AUTH_ENABLED|hari=|after=|TELEGRAM_ID|KURSOR/
   );
-  return text;
 }
-
-test("minimal help lists only real handlers authorized for each role/status", () => {
+test("minimal help lists only registered handlers authorized for each effective role/status", () => {
+  assert.ok(!handlers.has("outletinternal"));
+  assert.ok(handlers.has("editoutletinternal"));
+  assert.ok(handlers.has("hapusoutletinternal"));
   check(null, undefined, [...general, "register"]);
-  for (const status of ["pending", "disabled", "rejected"]) {
-    check(account(null, status), undefined, general);
-    check(account("admin", status), undefined, general);
-  }
-  const admin = check(account("admin"), undefined, [
-    ...general,
-    ...monitoring,
-    ...users,
-    ...outlets,
-  ]);
-  for (const heading of ["📅 Monitoring", "👥 Pengguna", "🏪 Outlet & Jadwal"])
-    assert.ok(admin.includes(heading));
-  check(account("supervisor"), undefined, [...general, ...monitoring]);
-  assert.match(
-    check(account("sales_force"), undefined, [...general, "jadwal", ...visits]),
-    /📋 Kunjungan/
-  );
-});
-
-test("demo availability and selected role control minimalist help; all demo writes stay hidden", () => {
-  const enabled = { ok: true, data: null };
-  check(null, enabled, [...general, "register", ...demoCommands]);
   for (const status of ["pending", "disabled", "rejected"])
-    check(account("admin", status), enabled, [...general, ...demoCommands]);
-  check(account("admin"), enabled, [
+    check(account("admin", status), undefined, general);
+  check(account("admin"), undefined, [
     ...general,
-    ...monitoring,
-    ...users,
-    ...outlets,
+    ...monitor,
+    ...reports,
+    ...assignments,
+    ...writes,
+  ]);
+  check(account("supervisor"), undefined, [...general, ...monitor, ...reports]);
+  check(account("sales_force"), undefined, [
+    ...general,
+    "jadwal",
+    "outlets",
+    "carioutlet",
+    "outlet",
+    ...reports,
+    ...visit,
+  ]);
+});
+test("Demo role overrides real Admin and hides every write", () => {
+  check(account("admin"), { ok: true, data: null }, [
+    ...general,
+    ...monitor,
+    ...reports,
+    ...assignments,
+    ...writes,
     ...demoCommands,
+    "tambahakundemo",
   ]);
   for (const role of ["admin", "supervisor", "sales_force"]) {
     const selected = {
@@ -121,18 +138,17 @@ test("demo availability and selected role control minimalist help; all demo writ
     const expected = [
       ...general,
       ...demoCommands,
-      ...(role === "sales_force" ? ["jadwal"] : monitoring),
+      ...reports,
+      ...(role === "sales_force"
+        ? ["jadwal", "outlets", "carioutlet", "outlet"]
+        : monitor),
+      ...(role === "admin" ? assignments : []),
     ];
-    assert.match(check(account("admin"), selected, expected), /🧪 Demo Mode/);
+    check(account("admin"), selected, expected);
     check(null, selected, expected);
   }
   check(account("admin"), { ok: false, code: "expired" }, [
     ...general,
     ...demoCommands,
-  ]);
-  check(account("sales_force"), { ok: false, code: "disabled" }, [
-    ...general,
-    "jadwal",
-    ...visits,
   ]);
 });

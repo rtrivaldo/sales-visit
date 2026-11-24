@@ -94,6 +94,15 @@ export class ScheduleOperations {
       "telegramUserId" in filter && typeof filter.telegramUserId === "string"
         ? filter.telegramUserId
         : null;
+    const code =
+      "salesForceCode" in filter && typeof filter.salesForceCode === "string"
+        ? filter.salesForceCode
+        : null;
+    const codeScope = `(EXISTS (SELECT 1 FROM actor WHERE role = 'admin') OR EXISTS (
+      SELECT 1 FROM sales_force_supervisors a JOIN actor ON actor.userId = a.supervisor_user_id
+      WHERE actor.role = 'supervisor' AND a.sales_force_id = sf.id))`;
+    const codeMatch = `SELECT sf.id FROM sales_force sf WHERE sf.id = ? COLLATE NOCASE
+      AND ${this.demo ? "sf.demo_only = 1 AND" : ""} ${codeScope}`;
     // Association availability is sensitive too: out-of-team and unknown
     // Telegram targets must yield the same result, even when no plan matches.
     const target = `SELECT target_link.sales_force_id FROM (${verifiedLinks}) target_link
@@ -108,7 +117,8 @@ export class ScheduleOperations {
       : `(EXISTS (SELECT 1 FROM actor WHERE role = 'admin') OR EXISTS (
           SELECT 1 FROM sales_force_supervisors assignment JOIN actor ON actor.userId = assignment.supervisor_user_id
           WHERE actor.role = 'supervisor' AND assignment.sales_force_id = s.sales_force_id))
-        AND (? IS NULL OR s.sales_force_id = ?) AND (? IS NULL OR s.sales_force_id = (${target}))`;
+        AND (? IS NULL OR s.sales_force_id = ?) AND (? IS NULL OR s.sales_force_id = (${target}))
+        AND (? IS NULL OR s.sales_force_id IN (${codeMatch}))`;
     const result = await batch(own ? "own" : "monitoring", (guard) => [
       {
         sql: `SELECT s.id, s.sales_force_id AS salesForceId, s.outlet_id AS outletId,
@@ -124,7 +134,14 @@ export class ScheduleOperations {
         values: [
           ...(own
             ? []
-            : [salesForceId, salesForceId, telegramUserId, telegramUserId]),
+            : [
+                salesForceId,
+                salesForceId,
+                telegramUserId,
+                telegramUserId,
+                code,
+                code,
+              ]),
           filter.weekday ?? null,
           filter.weekday ?? null,
           filter.after ?? "",
@@ -134,8 +151,25 @@ export class ScheduleOperations {
         sql: `SELECT 1 AS linked WHERE ${guard} AND (? IS NULL OR EXISTS (${target}))`,
         values: [telegramUserId, telegramUserId],
       },
+      {
+        sql: `SELECT sf.id, (SELECT count(*) FROM sales_force collision WHERE collision.id = sf.id COLLATE NOCASE
+          ${this.demo ? "AND collision.demo_only = 1" : ""}) AS matches
+          FROM sales_force sf WHERE ${guard} AND sf.id = ? COLLATE NOCASE
+          AND ${this.demo ? "sf.demo_only = 1 AND" : ""} ${codeScope} LIMIT 2`,
+        values: [code],
+      },
     ]);
     if (!result.ok) return result;
+    const selectedCode = result.data[2]!.results[0] as
+      | { matches: number }
+      | undefined;
+    if (code !== null && (!selectedCode || selectedCode.matches !== 1))
+      return {
+        ok: false,
+        code: result.data[2]!.results.length
+          ? "ambiguous"
+          : "reference_not_found",
+      };
     if (!result.data[1]!.results.length)
       return { ok: false, code: "association_unavailable" };
     const rows = result.data[0]!.results.map((row) =>

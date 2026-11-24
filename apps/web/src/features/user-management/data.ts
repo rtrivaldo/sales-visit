@@ -33,9 +33,9 @@ export async function loadUsers(search: UserSearch) {
   return { pending, users };
 }
 export const accountName = (row: WebUserAccount) =>
-  (row.telegramUserId
-    ? [row.firstName, row.lastName].filter(Boolean).join(" ")
-    : row.displayName) || "Akun";
+  row.displayName ||
+  [row.firstName, row.lastName].filter(Boolean).join(" ") ||
+  "Akun";
 export const statusLabels = {
   pending: "Menunggu persetujuan",
   active: "Aktif",

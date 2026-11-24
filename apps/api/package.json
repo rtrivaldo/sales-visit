@@ -12,6 +12,7 @@
     "cf-typegen": "wrangler types --env-interface ApiBindings --strict-vars=false"
   },
   "dependencies": {
+    "@e965/xlsx": "0.20.3",
     "@sales-visit/contracts": "workspace:*",
     "@sales-visit/db": "workspace:*",
     "hono": "^4.13.16",
