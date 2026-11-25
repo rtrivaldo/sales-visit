@@ -23,7 +23,11 @@ export async function catalogPage(
     : scope;
   const [items, totals] = await db.batch([
     db
-      .select({ id: table.id, name: table.name })
+      .select({
+        id: table.id,
+        name: table.name,
+        ...(kind === "outlets" ? { businessId: outlets.businessId } : {}),
+      })
       .from(table)
       .where(where)
       .orderBy(table.id)

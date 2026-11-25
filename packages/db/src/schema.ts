@@ -493,6 +493,23 @@ export const visits = sqliteTable(
   "visits",
   {
     id: id(),
+    reportingWeek: integer("reporting_week"),
+    reportingMonth: integer("reporting_month"),
+    reportingYear: integer("reporting_year"),
+    digiposBalance: integer("digipos_balance"),
+    perdanaSaStock: integer("perdana_sa_stock"),
+    perdanaSaSelling: integer("perdana_sa_selling"),
+    perdanaSaSellout: integer("perdana_sa_sellout"),
+    vfDataStock: integer("vf_data_stock"),
+    vfDataSelling: integer("vf_data_selling"),
+    vfDataSellout: integer("vf_data_sellout"),
+    vfVoiceStock: integer("vf_voice_stock"),
+    vfVoiceSelling: integer("vf_voice_selling"),
+    vfVoiceSellout: integer("vf_voice_sellout"),
+    isCvmActive: integer("is_cvm_active", { mode: "boolean" }),
+    isVoiceActive: integer("is_voice_active", { mode: "boolean" }),
+    isDigitalActive: integer("is_digital_active", { mode: "boolean" }),
+    totalPurchase: integer("total_purchase"),
     outletId: text("outlet_id")
       .notNull()
       .references(() => outlets.id, {
@@ -515,6 +532,42 @@ export const visits = sqliteTable(
   },
   (table) => [
     check("visits_id_nonblank", sql`length(trim(${table.id})) > 0`),
+    ...(
+      [
+        ["reporting_week", table.reportingWeek, 1, 4],
+        ["reporting_month", table.reportingMonth, 1, 12],
+        ["reporting_year", table.reportingYear, 1, 9999],
+        ["digipos_balance", table.digiposBalance, 0, Number.MAX_SAFE_INTEGER],
+        ["perdana_sa_stock", table.perdanaSaStock, 0, Number.MAX_SAFE_INTEGER],
+        [
+          "perdana_sa_selling",
+          table.perdanaSaSelling,
+          0,
+          Number.MAX_SAFE_INTEGER,
+        ],
+        [
+          "perdana_sa_sellout",
+          table.perdanaSaSellout,
+          0,
+          Number.MAX_SAFE_INTEGER,
+        ],
+        ["vf_data_stock", table.vfDataStock, 0, Number.MAX_SAFE_INTEGER],
+        ["vf_data_selling", table.vfDataSelling, 0, Number.MAX_SAFE_INTEGER],
+        ["vf_data_sellout", table.vfDataSellout, 0, Number.MAX_SAFE_INTEGER],
+        ["vf_voice_stock", table.vfVoiceStock, 0, Number.MAX_SAFE_INTEGER],
+        ["vf_voice_selling", table.vfVoiceSelling, 0, Number.MAX_SAFE_INTEGER],
+        ["vf_voice_sellout", table.vfVoiceSellout, 0, Number.MAX_SAFE_INTEGER],
+        ["total_purchase", table.totalPurchase, 0, Number.MAX_SAFE_INTEGER],
+        ["is_cvm_active", table.isCvmActive, 0, 1],
+        ["is_voice_active", table.isVoiceActive, 0, 1],
+        ["is_digital_active", table.isDigitalActive, 0, 1],
+      ] as const
+    ).map(([name, column, min, max]) =>
+      check(
+        `visits_${name}_valid`,
+        sql`${column} is null or (typeof(${column}) = 'integer' and ${column} between ${sql.raw(String(min))} and ${sql.raw(String(max))})`
+      )
+    ),
     check(
       "visits_channel_valid",
       sql`${table.submissionChannel} in ('web', 'telegram')`

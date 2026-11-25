@@ -41,45 +41,59 @@ test("all new business commands map to shared API contracts, retain filters and 
                   submissionChannel: "web",
                   stockReports: [],
                 }
-              : path.pathname === "/stock-reports"
+              : path.pathname === "/stock-reports/S001"
                 ? {
+                    id: "S001",
+                    outletId: "O001",
+                    reporterSalesForceId: "SF001",
+                    reportedAt: "2026-06-12",
                     items: [
                       {
-                        id: "S001",
-                        outletId: "O001",
-                        reporterSalesForceId: "SF001",
-                        reportedAt: "2026-06-12",
-                        items: [
-                          {
-                            productId: "P001",
-                            quantity: 3,
-                            product: { id: "P001", name: "Perdana" },
-                          },
-                        ],
+                        productId: "P001",
+                        quantity: 3,
+                        product: { id: "P001", name: "Perdana" },
                       },
                     ],
-                    total: 1,
                   }
-                : path.pathname === "/supervisors"
-                  ? { items: [{ id: "U001", name: "Andi" }], next: "U001" }
-                  : path.pathname === "/supervisor-assignments" &&
-                      input.method === "GET"
-                    ? {
-                        items: [
-                          {
-                            salesForceId: "SF001",
-                            salesForceName: "Budi",
-                            supervisorUserId: "U001",
-                            supervisorName: "Andi",
-                          },
-                        ],
-                        next: "SF001",
-                      }
-                    : path.pathname === "/sales-force" ||
-                        path.pathname === "/outlets" ||
-                        path.pathname === "/visits"
-                      ? { items: [], total: 30 }
-                      : { id: "new" };
+                : path.pathname === "/stock-reports"
+                  ? {
+                      items: [
+                        {
+                          id: "S001",
+                          outletId: "O001",
+                          reporterSalesForceId: "SF001",
+                          reportedAt: "2026-06-12",
+                          items: [
+                            {
+                              productId: "P001",
+                              quantity: 3,
+                              product: { id: "P001", name: "Perdana" },
+                            },
+                          ],
+                        },
+                      ],
+                      total: 1,
+                    }
+                  : path.pathname === "/supervisors"
+                    ? { items: [{ id: "U001", name: "Andi" }], next: "U001" }
+                    : path.pathname === "/supervisor-assignments" &&
+                        input.method === "GET"
+                      ? {
+                          items: [
+                            {
+                              salesForceId: "SF001",
+                              salesForceName: "Budi",
+                              supervisorUserId: "U001",
+                              supervisorName: "Andi",
+                            },
+                          ],
+                          next: "SF001",
+                        }
+                      : path.pathname === "/sales-force" ||
+                          path.pathname === "/outlets" ||
+                          path.pathname === "/visits"
+                        ? { items: [], total: 30 }
+                        : { id: "new" };
       return { ok: true, data };
     },
   };
@@ -102,7 +116,6 @@ test("all new business commands map to shared API contracts, retain filters and 
   };
   for (const [name, match] of [
     ["dashboard", ""],
-    ["salesforce", "q=Budi offset=10"],
     ["carioutlet", "q=OUT001"],
     ["detailsalesforce", "SF001"],
     [
@@ -111,7 +124,7 @@ test("all new business commands map to shared API contracts, retain filters and 
     ],
     ["detailvisit", "V001"],
     ["stockreport", "salesForceId=SF001"],
-    ["supervisors", ""],
+    ["supervisor", "123"],
     ["penugasan", "q=Andi"],
   ])
     assert.ok((await run(name, match)).length, name);
@@ -120,7 +133,28 @@ test("all new business commands map to shared API contracts, retain filters and 
     await run("riwayatvisit", "channel=web date=2026-06-12 offset=10"),
     /channel=web date=2026-06-12 offset=20/
   );
-  assert.match(await run("stockreport", ""), /Perdana: 3/);
+  assert.match(
+    await run("stockreport", "outletId=O001"),
+    /Detail: \/detailstok S001/
+  );
+  assert.doesNotMatch(await run("stockreport", "outletId=O001"), /Perdana: 3/);
+  assert.match(await run("detailstok", "S001"), /Perdana: 3/);
+  for (const command of [
+    "supervisor",
+    "detailvisit",
+    "detailsalesforce",
+    "detailstok",
+    "stockreport",
+    "carioutlet",
+    "produk",
+    "penugasan",
+  ]) {
+    const before = calls.length;
+    assert.match(await run(command, ""), /Format|Penggunaan/);
+    assert.equal(calls.length, before);
+  }
+  for (const command of ["salesforce", "supervisors"])
+    assert.equal(commands.has(command), false);
   assert.match(await run("penugasan", "q=Andi"), /q=Andi after=SF001/);
   for (const [command, args] of [
     ["tambahsalesforce", "SF001 Budi"],

@@ -5,7 +5,7 @@ import type {
   VisitListItem,
 } from "@sales-visit/contracts";
 
-import { api } from "@/features/auth/session";
+import { api, currentAccount } from "@/features/auth/session";
 
 import type { VisitFilters } from "./filter-visits";
 
@@ -22,11 +22,24 @@ export async function loadVisits(filters: VisitFilters) {
     outletId: filters.outlet,
     stock: filters.stock,
     date: filters.date,
+    reportingWeek: filters.reportingWeek,
+    reportingMonth: filters.reportingMonth,
+    reportingYear: filters.reportingYear,
   }))
     if (value) query.set(key, value);
   const [page, members, outlets] = await Promise.all([
     api<ReadPage<VisitListItem>>(`/visits?${query}`),
-    api<ReadPage<Reference>>("/sales-force?view=page&limit=100"),
+    currentAccount()?.role === "sales_force"
+      ? Promise.resolve({
+          items: [
+            {
+              id: currentAccount()!.salesForceId!,
+              name: currentAccount()!.name,
+            },
+          ],
+          total: 1,
+        })
+      : api<ReadPage<Reference>>("/sales-force?view=page&limit=100"),
     api<ReadPage<Reference>>("/outlets?view=page&limit=100"),
   ]);
   return { ...page, members, outlets };

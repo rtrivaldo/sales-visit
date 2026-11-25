@@ -3,6 +3,7 @@ import type { Visit } from "./visit.ts";
 export interface Reference {
   id: string;
   name: string;
+  businessId?: string | null;
 }
 export type NamedVisit = Visit & {
   outlet: Reference | null;

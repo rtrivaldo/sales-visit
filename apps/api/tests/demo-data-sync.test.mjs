@@ -164,9 +164,11 @@ test("Web and Telegram share accounts, seeded schedules, outlet records and live
       ).json();
       assert.deepEqual(
         page.items,
-        outlets
-          .slice(10, 20)
-          .map((outlet) => ({ id: outlet.id, name: outlet.name }))
+        outlets.slice(10, 20).map((outlet) => ({
+          id: outlet.id,
+          name: outlet.name,
+          businessId: outlet.businessId,
+        }))
       );
       assert.equal(page.total, 35);
     } else {
@@ -288,7 +290,7 @@ test("real and mixed-provenance records stay hidden in BOTH demo channels; norma
   );
   assert.equal(
     (await f.request("/visits", token, { method: "POST", body: "{}" })).status,
-    401
+    403
   );
   const identity = await f.api.me(real);
   const realToken = "a".repeat(64);

@@ -7,12 +7,12 @@ INSERT INTO sales_force (id, name, created_at) VALUES
   ('sf-03', 'Fajar Ramadhan', 1793664000000)
 ON CONFLICT (id) DO NOTHING;
 
-INSERT INTO outlets (id, name, created_at) VALUES
-  ('out-01', 'Dago Cell', 1793664000000),
-  ('out-02', 'Sukajadi Pulsa', 1793664000000),
-  ('out-03', 'Cihampelas Cellular', 1793664000000),
-  ('out-04', 'Pasteur Phone', 1793664000000),
-  ('out-05', 'Cipaganti Cell', 1793664000000)
+INSERT INTO outlets (id, name, business_id, created_at) VALUES
+  ('out-01', 'Dago Cell', 'LOCAL-OUT-01', 1793664000000),
+  ('out-02', 'Sukajadi Pulsa', 'LOCAL-OUT-02', 1793664000000),
+  ('out-03', 'Cihampelas Cellular', 'LOCAL-OUT-03', 1793664000000),
+  ('out-04', 'Pasteur Phone', 'LOCAL-OUT-04', 1793664000000),
+  ('out-05', 'Cipaganti Cell', 'LOCAL-OUT-05', 1793664000000)
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO products (id, name, created_at) VALUES

@@ -119,6 +119,9 @@ export function adminUserRoutes() {
   app.get("/", async (c) => {
     const after = c.req.query("after") ?? "";
     const status = c.req.query("status") ?? "";
+    const telegramId = c.req.query("telegramId") ?? "";
+    if (telegramId && !/^[1-9][0-9]{0,19}$/.test(telegramId))
+      return c.json({ error: "Invalid request" }, 400);
     const limit = c.req.query("limit") ?? "50";
     if (
       after.length > 256 ||
@@ -133,11 +136,13 @@ export function adminUserRoutes() {
       c.env.DB.prepare(`SELECT 1 WHERE ${webAdminGuard}`).bind(hash),
       c.env.DB.prepare(`SELECT accounts.*, sf.name AS salesForceName FROM (${accountQuery}) accounts
         LEFT JOIN sales_force sf ON sf.id = accounts.salesForceId
-        WHERE accounts.id > ? AND (? = '' OR accounts.status = ?) AND ${webAdminGuard}
+        WHERE accounts.id > ? AND (? = '' OR accounts.status = ?) AND (? = '' OR accounts.telegramUserId = ?) AND ${webAdminGuard}
         ORDER BY accounts.id LIMIT ?`).bind(
         after,
         status,
         status,
+        telegramId,
+        telegramId,
         hash,
         Number(limit) + 1
       ),

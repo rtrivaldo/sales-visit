@@ -10,12 +10,7 @@ import {
 import { Bot, type Context } from "grammy";
 
 import { actor } from "../actor.ts";
-import {
-  label,
-  replyBlocks,
-  decodeToken,
-  displayId,
-} from "../planning/shared.ts";
+import { label, replyBlocks } from "../planning/shared.ts";
 import { helpSections } from "./help.ts";
 
 const approvalUsage =
@@ -141,30 +136,14 @@ export function registerCommands(bot: Bot, api: BotIdentityService) {
       ...(page.next ? [`Berikutnya: /pending ${page.next}`] : []),
     ]);
   });
-  bot.command("users", async (ctx) => {
-    const args = ctx.match.trim().split(/\s+/).filter(Boolean);
-    let after = "",
-      status = "";
-    try {
-      for (const token of args) {
-        if (token.startsWith("status=")) {
-          if (status) throw new Error("args");
-          status = token.slice(7);
-          if (!["active", "pending", "disabled", "rejected"].includes(status))
-            throw new Error("args");
-        } else {
-          if (after) throw new Error("args");
-          after = decodeToken(token);
-        }
-      }
-    } catch {
-      await ctx.reply(
-        "Format: /users [KURSOR] [status=active|pending|disabled|rejected]"
-      );
+  bot.command("user", async (ctx) => {
+    const telegramId = ctx.match.trim();
+    if (!/^[1-9][0-9]{0,19}$/.test(telegramId)) {
+      await ctx.reply("Penggunaan: /user ID_TELEGRAM");
       return;
     }
     const response = await api.business(actor(ctx), {
-      path: `/admin/users?limit=10&after=${encodeURIComponent(after)}&status=${status}`,
+      path: `/admin/users?limit=1&telegramId=${encodeURIComponent(telegramId)}`,
     });
     if (!response.ok) {
       await ctx.reply(response.error);
@@ -172,7 +151,7 @@ export function registerCommands(bot: Bot, api: BotIdentityService) {
     }
     const page = response.data as UserPage;
     await replyBlocks(ctx, [
-      page.items.length ? "DAFTAR PENGGUNA" : "Belum ada pengguna terdaftar.",
+      page.items.length ? "DETAIL PENGGUNA" : "Pengguna tidak ditemukan.",
       ...page.items.map((account) =>
         [
           `Nama: ${label(account.displayName ?? [account.firstName, account.lastName].filter(Boolean).join(" ")) || "-"}`,
@@ -182,11 +161,6 @@ export function registerCommands(bot: Bot, api: BotIdentityService) {
           `Sales Force ID: ${label(account.salesForceId ?? "-")}`,
         ].join("\n")
       ),
-      ...(page.next
-        ? [
-            `Berikutnya: /users ${displayId(page.next)}${status ? ` status=${status}` : ""}`,
-          ]
-        : []),
     ]);
   });
   bot.command("setrole", async (ctx) => {

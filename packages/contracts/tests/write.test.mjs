@@ -7,6 +7,8 @@ import {
   idempotencyKeySchema,
 } from "@sales-visit/contracts";
 
+import { visitReport } from "./visit-fixture.mjs";
+
 const report = {
   outletId: "outlet-1",
   reportedAt: "2026-11-04T09:00:00+07:00",
@@ -18,7 +20,11 @@ test("write contracts exclude server-owned fields and normalize timestamps", () 
     createStockReportSchema.parse(report).reportedAt,
     "2026-11-04T02:00:00.000Z"
   );
-  const visit = { outletId: report.outletId, visitedAt: report.reportedAt };
+  const visit = {
+    ...visitReport,
+    outletId: report.outletId,
+    visitedAt: report.reportedAt,
+  };
   assert.ok(createVisitSchema.safeParse(visit).success);
   assert.ok(
     createVisitSchema.safeParse({
@@ -54,15 +60,21 @@ test("write contracts exclude server-owned fields and normalize timestamps", () 
 test("Visit Outlet keys preserve exact opaque values, never trimmed aliases", () => {
   for (const outletId of [" outlet-1 ", "Outlet 日本", "~reserved"]) {
     assert.equal(
-      createVisitSchema.parse({ outletId, visitedAt: report.reportedAt })
-        .outletId,
+      createVisitSchema.parse({
+        ...visitReport,
+        outletId,
+        visitedAt: report.reportedAt,
+      }).outletId,
       outletId
     );
   }
   for (const outletId of ["", "   "])
     assert.equal(
-      createVisitSchema.safeParse({ outletId, visitedAt: report.reportedAt })
-        .success,
+      createVisitSchema.safeParse({
+        ...visitReport,
+        outletId,
+        visitedAt: report.reportedAt,
+      }).success,
       false
     );
 });

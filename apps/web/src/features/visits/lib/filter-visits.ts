@@ -6,6 +6,9 @@ export type VisitFilters = {
   stock: string;
   date: string;
   offset: string;
+  reportingWeek: string;
+  reportingMonth: string;
+  reportingYear: string;
 };
 
 export function validateVisitSearch(
@@ -15,6 +18,15 @@ export function validateVisitSearch(
     typeof search[key] === "string" ? search[key] : "";
   return {
     q: text("q").slice(0, 200),
+    reportingWeek: /^[1-4]$/.test(text("reportingWeek"))
+      ? text("reportingWeek")
+      : "",
+    reportingMonth: /^(?:[1-9]|1[0-2])$/.test(text("reportingMonth"))
+      ? text("reportingMonth")
+      : "",
+    reportingYear: /^[1-9][0-9]{3}$/.test(text("reportingYear"))
+      ? text("reportingYear")
+      : "",
     member: text("member"),
     outlet: text("outlet"),
     channel: ["web", "telegram"].includes(text("channel"))

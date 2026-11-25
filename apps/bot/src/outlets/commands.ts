@@ -7,7 +7,6 @@ import {
   decodeToken,
   displayId,
   label,
-  nextPage,
   parseOrUsage,
   planningResult,
   replyBlocks,
@@ -17,24 +16,6 @@ function outlet(row: OutletDetail) {
   return `Nama Outlet: ${label(row.name)}\nID Outlet Bisnis: ${row.businessId === null ? "belum didata" : displayId(row.businessId)}\nNo. RS: ${row.noRs === null ? "belum didata" : label(row.noRs)}${row.businessId === null ? `\nInternal ID/token: ${displayId(row.id)}` : ""}`;
 }
 export function outletCommands(bot: Bot, api: BotIdentityService) {
-  bot.command("outlets", async (ctx) => {
-    const input = await parseOrUsage(ctx, "Format: /outlets [KURSOR]", () => {
-      const tokens = args(ctx.match);
-      if (tokens.length > 1) throw new Error("args");
-      return tokens[0] ? { after: decodeToken(tokens[0]) } : {};
-    });
-    if (!input) return;
-    const page = await planningResult(ctx, () =>
-      api.listOutlets(actor(ctx), input)
-    );
-    if (!page) return;
-    await replyBlocks(ctx, [
-      "DAFTAR OUTLET",
-      ...page.items.map(outlet),
-      ...(!page.items.length ? ["Tidak ada Outlet."] : []),
-      ...(page.next ? [nextPage("/outlets ", page.next)] : []),
-    ]);
-  });
   // Internal mutation commands remain explicit; public detail uses business ID only.
   for (const internal of [false, true]) {
     const suffix = internal ? "internal" : "";

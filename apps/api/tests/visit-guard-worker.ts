@@ -1,3 +1,4 @@
+import { visitReportSchema } from "@sales-visit/contracts";
 // Test-only race injector; never referenced by the deployed entrypoint.
 import { createDb } from "@sales-visit/db";
 
@@ -32,6 +33,7 @@ export default {
         { salesForceId: "sf", submissionChannel: "telegram" },
         row.submission_key,
         {
+          ...visitReportSchema.parse(payload),
           outletId: payload.outletId,
           visitedAt: payload.visitedAt,
           notes: payload.notes,

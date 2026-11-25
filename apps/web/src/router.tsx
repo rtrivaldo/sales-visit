@@ -118,7 +118,11 @@ const dashboardRoute = createRoute({
         search: { redirect: safeReturn(location.href) },
         replace: true,
       });
-    if (account.role === "sales_force" && location.pathname !== "/workspace")
+    if (
+      account.role === "sales_force" &&
+      location.pathname !== "/workspace" &&
+      !/^\/(visits|outlets)(?:\/|$)/.test(location.pathname)
+    )
       throw redirect({ to: "/workspace", replace: true });
     if (account.role !== "sales_force" && location.pathname === "/workspace")
       throw redirect({ to: "/overview", replace: true });

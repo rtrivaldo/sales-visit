@@ -622,15 +622,13 @@ test("registration, authorization and verified webhook across real Worker RPC + 
           (await rpc("users", { ...actor(900), role: "admin" })).code,
           "invalid"
         );
-        await webhook(900, "/users");
-        assert.match(sent.at(-1).text, /Berikutnya: \/users/);
-        const next = sent.at(-1).text.match(/Berikutnya: (\/users \S+)/)[1];
-        await webhook(900, next);
-        assert.match(sent.at(-1).text, /DAFTAR PENGGUNA/);
-        await webhook(901, "/users");
+        await webhook(900, "/user 900");
+        assert.match(sent.at(-1).text, /DETAIL PENGGUNA/);
+        assert.doesNotMatch(sent.at(-1).text, /Berikutnya/);
+        await webhook(901, "/user 900");
         assert.match(sent.at(-1).text, /Akses ditolak/);
-        await webhook(900, "/users cursor extra");
-        assert.match(sent.at(-1).text, /Format:/);
+        await webhook(900, "/user");
+        assert.match(sent.at(-1).text, /Penggunaan:/);
       }
     );
 
@@ -823,7 +821,7 @@ test("registration, authorization and verified webhook across real Worker RPC + 
         );
         await webhook(900, `/disable ${loser}`);
         assert.match(sent.at(-1).text, /dinonaktifkan/);
-        await webhook(loser, "/outlets");
+        await webhook(loser, "/carioutlet q=test");
         assert.match(sent.at(-1).text, /Akses ditolak/);
         await webhook(900, `/enable ${loser}`);
         assert.match(sent.at(-1).text, /aktif kembali/);
@@ -971,7 +969,7 @@ test("registration, authorization and verified webhook across real Worker RPC + 
               "/setrole",
               "/approve",
               "/jadwalsales",
-              "/users",
+              "/user",
               "/disable",
               "/enable",
               "/tambahoutlet",

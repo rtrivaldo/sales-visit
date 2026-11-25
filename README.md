@@ -3,7 +3,9 @@
 Sales Visit records field-sales Visits and Outlet Stock Reports for a Telkomsel
 distribution workflow with partner Citra Indah. The Web Dashboard provides
 role-based monitoring and administration; the Telegram Bot supports guided Visit
-submission. Web report submission is not yet available.
+submission. Web Sales Force reporting now uses the same D1 operation and shared
+validation as Telegram, with review before saving. See
+[Visit reporting, migration and Development release](docs/sales-visit-update.md).
 
 ## Tech stack and workspace
 

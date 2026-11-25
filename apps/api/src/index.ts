@@ -24,11 +24,17 @@ import { salesForceManagementRoutes } from "./sales-force-management.ts";
 import { supervisorAssignmentRoutes } from "./supervisor-assignments.ts";
 import { userImportRoutes } from "./user-import.ts";
 import { listVisits, validReadQuery, visitDetail } from "./visit-reads.ts";
-import { authRoutes, sessionAccount, type WebEnv } from "./web-auth.ts";
+import {
+  authRoutes,
+  sessionAccount,
+  hashToken,
+  type WebEnv,
+} from "./web-auth.ts";
 import { webSchedules } from "./web-schedules.ts";
 
-// No header, secret, environment switch, or development bypass supplies identity.
-// Tests explicitly inject a resolver in-process; the deployed default denies writes.
+// Tests may inject an identity resolver in-process. Deployed Visit writes resolve
+// live Bearer sessions; never accept attribution from request JSON or headers.
+// The independent Stock Report authentication boundary remains unchanged.
 export function createApp(
   resolveIdentity: (
     request: Request,
@@ -57,11 +63,17 @@ export function createApp(
         if (
           !method ||
           !["GET", "POST", "PUT"].includes(method) ||
-          headers.some((h) => !["authorization", "content-type"].includes(h))
+          headers.some(
+            (h) =>
+              !["authorization", "content-type", "idempotency-key"].includes(h)
+          )
         )
           return c.json({ error: "Invalid preflight" }, 403);
         c.header("Access-Control-Allow-Methods", "GET, POST, PUT");
-        c.header("Access-Control-Allow-Headers", "Authorization, Content-Type");
+        c.header(
+          "Access-Control-Allow-Headers",
+          "Authorization, Content-Type, Idempotency-Key"
+        );
         return c.body(null, 204);
       }
     }
@@ -81,7 +93,26 @@ export function createApp(
   ] as const) {
     app.post(path, async (c) => {
       try {
-        const identity = await resolveIdentity(c.req.raw, c.env);
+        let identity = await resolveIdentity(c.req.raw, c.env);
+        if (!identity && path === "/visits") {
+          const account = await sessionAccount(c.req.raw, c.env.DB);
+          if (!account) return c.json({ error: "Unauthorized" }, 401);
+          // Demo personas have no Telegram identity and remain read-only.
+          const real = await c.env.DB.prepare(
+            "SELECT 1 FROM telegram_identities WHERE user_id = ?"
+          )
+            .bind(account.id)
+            .first();
+          if (account.role !== "sales_force" || !account.salesForceId || !real)
+            return c.json({ error: "Forbidden" }, 403);
+          identity = {
+            salesForceId: account.salesForceId,
+            submissionChannel: "web",
+            sessionHash: await hashToken(
+              c.req.header("Authorization")!.slice(7)
+            ),
+          };
+        }
         if (!identity) return c.json({ error: "Unauthorized" }, 401);
         let input: unknown;
         try {
@@ -192,8 +223,47 @@ export function createApp(
     return c.json(rows);
   });
 
+  app.get("/visits/entry-permission", async (c) => {
+    const account = c.get("account");
+    const real = await c.env.DB.prepare(
+      "SELECT 1 FROM telegram_identities WHERE user_id = ?"
+    )
+      .bind(account.id)
+      .first();
+    return c.json({
+      allowed:
+        account.role === "sales_force" && !!account.salesForceId && !!real,
+    });
+  });
   app.get("/visits", listVisits);
   app.get("/visits/:id", visitDetail);
+
+  app.get("/stock-reports/:id", async (c) => {
+    const row = await createDb(c.env.DB).query.stockReports.findFirst({
+      where: (t, { and, eq }) =>
+        and(
+          eq(t.id, c.req.param("id")!),
+          operationalScope(c.get("account").id, t.reporterSalesForceId)
+        ),
+      with: {
+        items: {
+          orderBy: (t, { asc }) => [asc(t.productId)],
+          with: { product: { columns: { id: true, name: true } } },
+        },
+        reporterSalesForce: { columns: { id: true, name: true } },
+      },
+    });
+    if (!row) return c.json({ error: "Not found" }, 404);
+    return c.json({
+      ...toStockReport(row),
+      reporter: row.reporterSalesForce,
+      items: row.items.map((item) => ({
+        productId: item.productId,
+        quantity: item.quantity,
+        product: item.product,
+      })),
+    });
+  });
 
   app.get("/stock-reports", async (c) => {
     const query = createDb(c.env.DB).query.stockReports.findMany({

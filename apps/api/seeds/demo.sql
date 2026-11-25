@@ -65,13 +65,23 @@ ON CONFLICT (id) DO NOTHING;
 
 -- 156 Visits, twelve SF with varying activity; SF 13 and 14 have no Visits.
 WITH RECURSIVE n(i) AS (VALUES(1) UNION ALL SELECT i+1 FROM n WHERE i<24)
-INSERT INTO visits (id, outlet_id, sales_force_id, visited_at, submission_channel, notes, follow_up, created_at)
+-- New synthetic rows have explicit business periods and observed values;
+-- ON CONFLICT never backfills or changes previously seeded reports.
+INSERT INTO visits (id, outlet_id, sales_force_id, visited_at, submission_channel, notes, follow_up, created_at,
+ reporting_week, reporting_month, reporting_year, digipos_balance,
+ perdana_sa_stock, perdana_sa_selling, perdana_sa_sellout,
+ vf_data_stock, vf_data_selling, vf_data_sellout,
+ vf_voice_stock, vf_voice_selling, vf_voice_sellout,
+ is_cvm_active, is_voice_active, is_digital_active, total_purchase)
 SELECT printf('demo-visit-%02d-%02d',cast(substr(sf.id,-2) AS INTEGER),i),
  printf('demo-out-%02d',1+((i+cast(substr(sf.id,-2) AS INTEGER))%35)), sf.id,
  1793664000000 + (i-1)*86400000 + cast(substr(sf.id,-2) AS INTEGER)*600000,
  'web', 'Meninjau pajangan dan ketersediaan produk.',
  CASE WHEN i%3=0 THEN 'Tinjau kembali kebutuhan voucher pekan depan.' END,
- 1793664000000 + (i-1)*86400000 + cast(substr(sf.id,-2) AS INTEGER)*600000
+ 1793664000000 + (i-1)*86400000 + cast(substr(sf.id,-2) AS INTEGER)*600000,
+ 1+(i%4), 11, 2026, i*100000,
+ i, i+1, i+2, i+3, i+4, i+5, i+6, i+7, i+8,
+ i%2, (i+1)%2, i%2, i*150000
 FROM sales_force sf CROSS JOIN n
 WHERE sf.id >= 'demo-sf-01' AND sf.id <= 'demo-sf-12' AND i <= cast(substr(sf.id,-2) AS INTEGER)*2
 AND sf.demo_only = 1

@@ -559,8 +559,8 @@ test("Web sessions and authorized reads on disposable local D1", async (t) => {
           (await request(`/visits?${query}`, { token: admin.token })).status,
           400
         );
-      for (const path of ["/visits", "/stock-reports"])
-        assert.equal((await post(path, {}, admin.token)).status, 401);
+      assert.equal((await post("/visits", {}, admin.token)).status, 403);
+      assert.equal((await post("/stock-reports", {}, admin.token)).status, 401);
     }
   );
   await t.test(

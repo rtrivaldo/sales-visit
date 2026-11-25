@@ -67,7 +67,7 @@ export function installCommands(bot: Bot, api: BotIdentityService) {
   businessCommands(bot, api);
   bot.on("message:text", (ctx) =>
     ctx.reply(
-      "Ketik /help untuk melihat perintah. Mulai Visit: /salesvisit. Jawaban draf memakai awalan outlet, waktu, catatan, atau tindaklanjut sesuai petunjuk; /batal untuk membatalkan."
+      "Ketik /help untuk melihat perintah. Mulai laporan: /salesvisit. Jawab pertanyaan dengan teks biasa; /batal untuk membatalkan."
     )
   );
 }

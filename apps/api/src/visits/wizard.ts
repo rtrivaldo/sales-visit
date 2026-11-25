@@ -1,6 +1,9 @@
 import {
   visitDraftPayloadSchema,
   visitWizardInputSchema,
+  visitQuestions,
+  parseVisitAnswer,
+  visitReportSchema,
   type BotActor,
   type VisitDraftPayload,
   type VisitDraftStep,
@@ -11,7 +14,6 @@ import { createDb } from "@sales-visit/db";
 
 import { createVisit, OperationError, submissionId } from "../operations.ts";
 import { planningBatch } from "../planning-access.ts";
-import { parseJakartaVisitTime } from "./time.ts";
 
 const TTL = 24 * 3600000;
 const active = new Set(["outlet", "time", "notes", "followUp", "review"]);
@@ -128,6 +130,7 @@ export class VisitWizard {
     if (!row) return { ok: false, code: "forbidden" };
     const userId = row.userId;
     const { action, messageId } = input;
+    if (action === "peek") return success(row);
     const now = Date.now();
     const expired = row.key && active.has(row.step) && row.expiresAt <= now;
 
@@ -233,6 +236,13 @@ export class VisitWizard {
     } else if (row.salesForceId !== row.currentSf) {
       return success(row, "link_changed");
     } else if (action === "confirm" && row.step === "review") {
+      if (!visitReportSchema.safeParse(readPayload(row.payload)).success) {
+        await this.change(actor, row, messageId, "step = 'notes'", []);
+        const latest = await this.read(actor);
+        return latest
+          ? success(latest, "invalid_input")
+          : { ok: false, code: "forbidden" };
+      }
       const changed = await this.change(
         actor,
         row,
@@ -252,7 +262,10 @@ export class VisitWizard {
       const payload = readPayload(row.payload);
       const value = input.value ?? "";
       const expected = row.step === "time" ? "time" : row.step;
-      if (input.field !== expected || !value.trim())
+      if (
+        (input.field !== undefined && input.field !== expected) ||
+        !value.trim()
+      )
         return success(row, "invalid_input");
       let next: VisitDraftStep;
       if (row.step === "outlet") {
@@ -261,7 +274,7 @@ export class VisitWizard {
         if (!id.success) return success(row, "invalid_input");
         const result = await planningBatch(this.db, actor, "own", (guard) => [
           {
-            sql: `SELECT id, name FROM outlets WHERE id = ? AND ${guard}`,
+            sql: `SELECT id, name, business_id AS businessId FROM outlets WHERE business_id = ? COLLATE NOCASE AND ${guard} LIMIT 2`,
             values: [id.data!],
           },
         ]);
@@ -271,23 +284,34 @@ export class VisitWizard {
             code: result.code === "forbidden" ? "forbidden" : "unavailable",
           };
         const outlet = result.data[0]?.results[0] as
-          | { id: string; name: string }
+          | { id: string; name: string; businessId: string }
           | undefined;
-        if (!outlet) return success(row, "outlet_missing");
+        if (!outlet || result.data[0]?.results.length !== 1)
+          return success(row, "outlet_missing");
         payload.outletId = outlet.id as string;
         // Bounded snapshot for preview; the key is exact and never truncated.
         payload.outletName = [...String(outlet.name)].slice(0, 256).join("");
-        next = "time";
-      } else if (row.step === "time") {
-        const time = parseJakartaVisitTime(value, now);
-        if (!time) return success(row, "invalid_input");
-        payload.visitedAt = time;
+        payload.outletBusinessId = outlet.businessId;
+        payload.visitedAt = new Date(now).toISOString();
+        // Reuse the durable draft's answer state; question position is derived
+        // from missing fields, not Worker memory. Legacy steps remain readable.
         next = "notes";
-      } else if (row.step === "notes" || row.step === "followUp") {
-        if (value.length > 1000) return success(row, "invalid_input");
-        payload[row.step] =
-          value.toLowerCase() === "lewati" ? undefined : value;
-        next = row.step === "notes" ? "followUp" : "review";
+      } else if (
+        row.step === "notes" ||
+        row.step === "time" ||
+        row.step === "followUp"
+      ) {
+        const question = visitQuestions.find(
+          ([key]) => payload[key] === undefined
+        );
+        if (!question) return success(row, "invalid_input");
+        const answer = parseVisitAnswer(question[0], value);
+        if (answer === undefined) return success(row, "invalid_input");
+        Object.assign(payload, { [question[0]]: answer });
+        payload.visitedAt ??= new Date(now).toISOString();
+        next = visitQuestions.every(([key]) => payload[key] !== undefined)
+          ? "review"
+          : "notes";
       } else return success(row, "invalid_input");
       const changed = await this.change(
         actor,
@@ -308,27 +332,56 @@ export class VisitWizard {
 
   private async submit(actor: BotActor, row: Row): Promise<VisitWizardResult> {
     if (row.salesForceId !== row.currentSf) return success(row, "link_changed");
+    if (row.step === "submitted" && row.visitId) return success(row);
     const payload = readPayload(row.payload);
     try {
-      const result = await createVisit(
-        createDb(this.db),
-        {
-          salesForceId: row.currentSf,
-          submissionChannel: "telegram",
-        },
-        row.key,
-        {
-          outletId: payload.outletId,
-          visitedAt: payload.visitedAt,
-          notes: payload.notes,
-          followUp: payload.followUp,
-        },
-        {
-          telegramUserId: actor.telegramUserId,
-          userId: row.userId,
-          draftKey: row.key!,
-        }
-      );
+      const report = visitReportSchema.safeParse(payload);
+      let visitId: string;
+      if (!report.success) {
+        // Recover receipts committed by the pre-upgrade wizard without
+        // fabricating financial fields or replaying a now-invalid old write.
+        const id = await submissionId(
+          { salesForceId: row.currentSf, submissionChannel: "telegram" },
+          row.key,
+          "visit"
+        );
+        const existing = await planningBatch(this.db, actor, "own", (guard) => [
+          {
+            sql: `SELECT id FROM visits WHERE id = ? AND sales_force_id = (SELECT salesForceId FROM actor) AND ${guard}`,
+            values: [id],
+          },
+        ]);
+        if (!existing.ok)
+          return {
+            ok: false,
+            code: existing.code === "forbidden" ? "forbidden" : "unavailable",
+          };
+        if (!existing.data[0]?.results.length)
+          return success(row, "invalid_input");
+        visitId = id;
+      } else {
+        const result = await createVisit(
+          createDb(this.db),
+          {
+            salesForceId: row.currentSf,
+            submissionChannel: "telegram",
+          },
+          row.key,
+          {
+            ...report.data,
+            outletId: payload.outletId,
+            visitedAt: payload.visitedAt,
+            notes: payload.notes,
+            followUp: payload.followUp,
+          },
+          {
+            telegramUserId: actor.telegramUserId,
+            userId: row.userId,
+            draftKey: row.key!,
+          }
+        );
+        visitId = result.data.id;
+      }
       // Separate recoverable finalization. A failed write leaves submitting and
       // the immutable UUID/payload; the next confirmation replays createVisit.
       const final = await planningBatch(this.db, actor, "own", (guard) => [
@@ -336,7 +389,7 @@ export class VisitWizard {
           sql: `UPDATE telegram_visit_drafts SET step = 'submitted', visit_id = ?, revision = revision + 1
           WHERE user_id = ? AND submission_key = ? AND step = 'submitting'
           AND sales_force_id = (SELECT salesForceId FROM actor) AND ${guard}`,
-          values: [result.data.id, row.userId, row.key],
+          values: [visitId, row.userId, row.key],
         },
       ]);
       if (!final.ok)
@@ -344,7 +397,7 @@ export class VisitWizard {
           ok: false,
           code: final.code === "forbidden" ? "forbidden" : "unavailable",
         };
-      return success({ ...row, step: "submitted", visitId: result.data.id });
+      return success({ ...row, step: "submitted", visitId });
     } catch (error) {
       if (error instanceof OperationError) {
         if (error.status === 401) return { ok: false, code: "forbidden" };

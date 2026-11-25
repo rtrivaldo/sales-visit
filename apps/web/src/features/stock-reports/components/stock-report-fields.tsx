@@ -11,17 +11,19 @@ import {
   FieldSet,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
-import { products } from "@/data/mock-data";
+import { products as defaultProducts } from "@/data/mock-data";
 import { EntrySelect } from "@/features/visits/components/entry-select";
 import type { EntryErrors, StockRow } from "@/features/visits/lib/visit-entry";
 
 export function StockReportFields({
+  catalog = defaultProducts,
   enabled,
   rows,
   errors,
   onToggle,
   onChange,
 }: {
+  catalog?: { id: string; name: string }[];
   enabled: boolean;
   rows: StockRow[];
   errors: EntryErrors;
@@ -56,7 +58,7 @@ export function StockReportFields({
                   id={`product-${row.id}`}
                   label="Produk"
                   value={row.productId}
-                  options={products.map((product) => ({
+                  options={catalog.map((product) => ({
                     value: product.id,
                     label: product.name,
                     disabled: rows.some(
@@ -117,7 +119,7 @@ export function StockReportFields({
             type="button"
             variant="outline"
             className="self-start"
-            disabled={rows.length >= products.length}
+            disabled={rows.length >= Math.min(catalog.length, 100)}
             onClick={() =>
               onChange([
                 ...rows,

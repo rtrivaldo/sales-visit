@@ -52,6 +52,9 @@ export function supervisorAssignmentRoutes() {
 
   app.get("/supervisors", async (c) => {
     const after = c.req.query("after") ?? "";
+    const telegramId = c.req.query("telegramId") ?? "";
+    if (telegramId && !/^[1-9][0-9]{0,19}$/.test(telegramId))
+      return c.json({ error: "Invalid request" }, 400);
     const demo = await isDemoAccount(c.env.DB, c.get("account").id);
     if (after && !validId(after))
       return c.json({ error: "Invalid request" }, 400);
@@ -61,8 +64,14 @@ export function supervisorAssignmentRoutes() {
       c.env.DB.prepare(`SELECT 1 WHERE ${adminGuard}`).bind(hash, now),
       c.env.DB.prepare(`SELECT u.id, coalesce(u.display_name, nullif(trim(coalesce(t.first_name, '') || ' ' || coalesce(t.last_name, '')), ''), u.id) AS name FROM users u
         LEFT JOIN telegram_identities t ON t.user_id = u.id
-        WHERE u.status = 'active' AND u.role = 'supervisor' AND u.id > ? AND ${demo ? demoEligibility + " AND" : ""} ${adminGuard}
-        ORDER BY u.id LIMIT 101`).bind(after, hash, now),
+        WHERE u.status = 'active' AND u.role = 'supervisor' AND u.id > ? AND (? = '' OR t.telegram_user_id = ?) AND ${demo ? demoEligibility + " AND" : ""} ${adminGuard}
+        ORDER BY u.id LIMIT 101`).bind(
+        after,
+        telegramId,
+        telegramId,
+        hash,
+        now
+      ),
     ]);
     if (!permission!.results.length) return c.json({ error: "Forbidden" }, 403);
     // SQL projection above contains exactly these fields.

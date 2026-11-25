@@ -31,16 +31,15 @@ export function helpSections(
     sections.push(
       section("📅 Monitoring", [
         "/jadwalsales kode_sf [hari] — Jadwal Sales Force.",
-        "/outlets — Daftar Outlet.",
-        "/outlet — Lihat detail Outlet.",
-        "/carioutlet — Cari Outlet.",
+        "/outlet ID_OUTLET — Detail Outlet.",
+        "/carioutlet q=NAMA — Cari Outlet (10 per halaman).",
       ])
     );
   if (role === "admin" && !readOnly) {
     sections.push(
       section("👥 Pengguna", [
         "/pending — Lihat permintaan registrasi.",
-        "/users — Daftar pengguna.",
+        "/user ID_TELEGRAM — Detail pengguna.",
         "/approve — Setujui registrasi.",
         "/reject — Tolak registrasi.",
         "/setrole — Ubah role pengguna aktif.",
@@ -67,8 +66,7 @@ export function helpSections(
     );
     sections.push(
       section("👨‍💼 Sales Force", [
-        "/salesforce — Cari Sales Force.",
-        "/detailsalesforce — Detail Sales Force.",
+        "/detailsalesforce KODE_SF — Detail Sales Force.",
         ...(role === "admin" && !readOnly
           ? [
               "/tambahsalesforce — Tambah Sales Force.",
@@ -82,8 +80,8 @@ export function helpSections(
   if (role === "admin")
     sections.push(
       section("🤝 Penugasan Supervisor", [
-        "/supervisors — Daftar Supervisor.",
-        "/penugasan — Cari penugasan.",
+        "/supervisor ID_TELEGRAM — Detail Supervisor.",
+        "/penugasan q=NAMA — Cari penugasan (5 per halaman).",
         ...(!readOnly
           ? [
               "/assignsupervisor — Tetapkan atau ganti Supervisor.",
@@ -93,23 +91,27 @@ export function helpSections(
       ])
     );
   if (role) {
-    sections.push(section("📦 Produk", ["/produk — Cari katalog produk."]));
+    sections.push(
+      section("📦 Produk", ["/produk q=NAMA — Cari produk (10 per halaman)."])
+    );
     if (role === "sales_force")
       sections.push(
         section("🏪 Outlet", [
-          "/outlets — Daftar Outlet.",
-          "/carioutlet — Cari Outlet.",
-          "/outlet — Lihat detail Outlet.",
+          "/carioutlet q=NAMA — Cari Outlet (10 per halaman).",
+          "/outlet ID_OUTLET — Detail Outlet.",
         ])
       );
     sections.push(
       section("📋 Riwayat Kunjungan", [
-        "/riwayatvisit — Cari riwayat sesuai akses.",
-        "/detailvisit — Detail kunjungan.",
+        "/riwayatvisit outletId=ID — Riwayat sesuai akses (10 per halaman).",
+        "/detailvisit ID_KUNJUNGAN — Detail kunjungan.",
       ])
     );
     sections.push(
-      section("📦 Laporan Stok", ["/stockreport — Laporan stok sesuai akses."])
+      section("📦 Laporan Stok", [
+        "/stockreport outletId=ID — Riwayat stok (10 per halaman).",
+        "/detailstok ID_LAPORAN — Detail laporan stok.",
+      ])
     );
   }
   if (role === "sales_force") {

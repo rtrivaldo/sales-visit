@@ -1,9 +1,12 @@
 import { z } from "zod";
 
 import { identifierSchema, submissionChannelSchema } from "./shared.ts";
+import { visitReportSchema, reportingCalendarSchema } from "./visit-report.ts";
 
 // A Visit records its outcome; it does not require a Stock Report.
 export const visitSchema = z.object({
+  ...visitReportSchema.partial().shape,
+  ...reportingCalendarSchema.partial().shape,
   id: identifierSchema,
   outletId: identifierSchema,
   salesForceId: identifierSchema,

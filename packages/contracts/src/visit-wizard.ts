@@ -6,7 +6,7 @@ import { createVisitSchema } from "./write.ts";
 
 export const visitWizardInputSchema = z.strictObject({
   messageId: z.number().int().positive().safe(),
-  action: z.enum(["start", "cancel", "confirm", "answer"]),
+  action: z.enum(["start", "cancel", "confirm", "answer", "peek"]),
   field: z.enum(["outlet", "time", "notes", "followUp"]).optional(),
   value: z.string().max(2000).optional(),
 });
@@ -16,6 +16,7 @@ export const visitDraftPayloadSchema = createVisitSchema
   .extend({
     outletId: planningIdSchema,
     outletName: z.string(),
+    outletBusinessId: z.string().optional(),
     notes: z.string().max(1000).optional(),
     followUp: z.string().max(1000).optional(),
   })

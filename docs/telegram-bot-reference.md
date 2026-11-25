@@ -1,145 +1,123 @@
 # Telegram Bot reference
 
-Commands run only in private chats using the verified Telegram sender ID. `/help`
-is compact and role-aware; Demo Mode overrides the real role and hides writes.
+Private chats only; the verified sender determines authority. `/help` follows the
+live role. Demo Mode is read-only and overrides the real account's role.
 A = active Admin; S = active Supervisor; SF = active Sales Force.
 
 ## Common and identity
 
-- `/start`, `/help`, `/me`: welcome, allowed commands, current identity.
-- `/register`: existing manual pending-registration flow. Imported active accounts
-  are recognized by `/start` and never need registration or another approval.
-- `/users [KURSOR] [status=active|pending|disabled|rejected]`, `/pending [KURSOR]`: Admin lists, ten per page. Users includes unlinked demo accounts, as on Web.
-- `/approve TELEGRAM_ID admin|supervisor` or
-  `/approve TELEGRAM_ID sales_force KODE_SF` (`sales` remains an alias).
-- `/reject TELEGRAM_ID`, `/disable TELEGRAM_ID`, `/enable TELEGRAM_ID`.
-- `/setrole TELEGRAM_ID admin|supervisor` or
-  `/setrole TELEGRAM_ID sales_force KODE_SF`.
+- `/start`, `/help`, `/me`, `/register`: unchanged registration/profile flows.
+- `/pending [KURSOR]`: A, approval queue, ten per page.
+- `/user ID_TELEGRAM`: A, one exact Telegram-linked user; no bulk fallback.
+- `/approve ID_TELEGRAM admin|supervisor` or `/approve ID_TELEGRAM sales_force KODE_SF`.
+- `/reject ID_TELEGRAM`, `/disable ID_TELEGRAM`, `/enable ID_TELEGRAM`.
+- `/setrole ID_TELEGRAM admin|supervisor` or `/setrole ID_TELEGRAM sales_force KODE_SF`.
 
-User administration is real Admin only. Active/protected/last Admin invariants,
-immutable reserved SF associations, audits and rejection finality are unchanged.
-Telegram IDs are positive decimal **strings**, never staff codes or usernames.
-Verify identity and SF association out of band before approval or import.
+Account protection, reserved SF associations and audit logging are unchanged.
+Use Web user management for unlinked demo accounts. IDs remain strings.
 
-## Dashboard and monitoring
+## Targeted monitoring
 
-- `/dashboard`: A/S, 14-day WIB counts, channels, daily activity and recent Visits.
-- `/salesforce [q=TOKEN] [offset=ANGKA]`: A/S, scoped directory search.
-- `/produk [q=TOKEN] [offset=ANGKA]`: all active roles, read-only product catalog.
-- `/detailsalesforce kode_sf`: exact business record detail within scope.
-- `/riwayatvisit [q=TOKEN] [salesForceId=KODE] [outletId=ID] [channel=web|telegram] [stock=with|without] [date=YYYY-MM-DD] [offset=ANGKA]`.
-- `/detailvisit visit_id`: notes, follow-up, references and linked stock reports.
-- `/stockreport [salesForceId=KODE] [outletId=ID] [offset=ANGKA]`.
+| Command                     | Access / result                                                    |
+| --------------------------- | ------------------------------------------------------------------ |
+| `/outlet ID_OUTLET`         | A/S/SF; one Outlet by case-insensitive **business ID**             |
+| `/detailsalesforce KODE_SF` | A/S; one authorized SF, established command retained               |
+| `/supervisor ID_TELEGRAM`   | A; one active Supervisor                                           |
+| `/detailvisit ID_KUNJUNGAN` | A/S/SF; Visit, financial/reporting fields and linked Stock Reports |
+| `/detailstok ID_LAPORAN`    | A/S/SF; one independently authorized Stock Report                  |
+| `/dashboard`                | A/S; bounded 14-day activity summary                               |
 
-Visits and stock reads are global for A, current assigned team for S, own for SF.
-Continuation commands preserve all filters. Reporting lists contain ten records.
+Missing identifiers produce usage instructions, never a list. Unknown/unauthorized
+records do not disclose restricted data. Visit/Stock Report scope is global for A,
+currently assigned team for S, and own records for SF. Outlet catalog access is
+catalog-wide for authorized users; an assigned schedule is not required to report.
+Leading zeros are preserved. Case-colliding business IDs fail as ambiguous.
 
-## Outlet and recurring schedules
+Removed registrations: `/outlets`, `/users`, `/salesforce`, `/supervisors`.
+Web lists and shared API/RPC listing operations remain available.
 
-| Command                                                       | Access                                                         |
-| ------------------------------------------------------------- | -------------------------------------------------------------- |
-| `/outlets [KURSOR]`                                           | A/S/SF, 50 records                                             |
-| `/carioutlet [q=TOKEN] [offset=ANGKA]`                        | A/S/SF, search                                                 |
-| `/outlet outlet_id`                                           | A/S/SF, case-insensitive **business ID**, no internal fallback |
-| `/tambahoutlet BUSINESS_ID NO_RS NAMA_OUTLET`                 | A                                                              |
-| `/editoutlet BUSINESS_ID NO_RS_BARU NAMA_OUTLET_BARU`         | A                                                              |
-| `/hapusoutlet BUSINESS_ID KONFIRMASI`                         | A; rejects referenced records                                  |
-| `/editoutletinternal INTERNAL_ID NO_RS_BARU NAMA_OUTLET_BARU` | A, retained                                                    |
-| `/hapusoutletinternal INTERNAL_ID KONFIRMASI`                 | A, retained                                                    |
-| `/jadwal [hari                                                | semua] [after=KURSOR]`                                         | SF, own; defaults today Jakarta |
-| `/jadwalsales kode_sf [hari] [after=KURSOR]`                  | A/S, S assigned team only                                      |
-| `/tambahjadwal KODE_SF INTERNAL_OUTLET_ID HARI`               | A                                                              |
+## Filtered collections
 
-Without arguments `/jadwalsales` displays:
+At least one substantive filter is required (an offset/cursor alone is insufficient).
+Copy returned continuation commands, which preserve filters.
 
-```text
-Format: /jadwalsales kode_sf [hari]
+- `/carioutlet q=NAMA [offset=ANGKA]`: ten authorized Outlet references.
+- `/produk q=NAMA [offset=ANGKA]`: ten product references.
+- `/riwayatvisit outletId=ID [offset=ANGKA]`: ten Visits; alternative filters:
+  `q`, `salesForceId`, `channel=web|telegram`, `stock=with|without`,
+  `date=YYYY-MM-DD`, `reportingWeek=1..4`, `reportingMonth=1..12`, `reportingYear`.
+- `/stockreport outletId=ID [offset=ANGKA]` or `/stockreport salesForceId=KODE`:
+  ten Stock Reports, including independent reports.
+- `/penugasan q=NAMA [after=KURSOR]`: A, five assignment records.
 
-Contoh:
-/jadwalsales SF001
-/jadwalsales SF001 senin
-```
+Plain-text replies are split at logical boundaries below Telegram's 4096-unit limit.
 
-SF code is mandatory and is `sales_force.id`. No Telegram-ID/day-only/named-filter
-syntax is supported. No day means **all weekdays** for that SF. Code/day matching
-is case-insensitive; leading zeros and stored spelling are preserved. Unknown or
-ambiguous codes are rejected. Indonesian days: senin, selasa, rabu, kamis, jumat,
-sabtu, minggu. Next-page commands retain SF code and weekday.
+## Visit submission
 
-Outlet detail similarly accepts `OUT001`, `out001`, `Out001`. Case collisions
-produce an explicit ambiguity error, not an arbitrary record. Stored IDs are never
-normalized. No. RS is an opaque reference, not necessarily a phone number.
-Internal outlet tokens still identify immutable FKs in Visit/schedule entry.
-Schedules are recurring plans, **not completed Visits**.
+`/salesvisit` starts/resumes a durable, 24-hour D1 draft for a real active SF.
+Answer with ordinary text, without field prefixes:
 
-Outlet catalog reads (outlets, carioutlet, outlet) are also available to active,
-uniquely associated SF accounts, matching Web catalog access. SF cannot modify outlets.
+1. Outlet **business ID**; the API resolves its existing internal FK and name.
+2. Periode: `1`, `2`, `3` or `4` (Minggu ke-1 through Minggu ke-4).
+3. Saldo Digipos.
+4. Perdana SA: Stok, Selling, Sellout.
+5. VF Data: Stok, Selling, Sellout.
+6. VF Voice: Stok, Selling, Sellout.
+7. Outlet Aktif: CVM, Voice, Digital.
+8. Total Belanja.
+9. Review; `Y` saves, `N` cancels. `/konfirmasi` also saves/retries safely.
 
-## SF and assignment management
+No separate Outlet-name, visit-time, notes or follow-up questions. Visit time is
+captured at Outlet selection; month/year derive from that instant in Asia/Jakarta.
+Periods are business selections, not calculated calendar/ISO weeks.
 
-- `/tambahsalesforce kode_sf nama KONFIRMASI`.
-- `/editsalesforce kode_sf nama_baru KONFIRMASI`: changes only name;
-  shares Web optimistic-concurrency and audit guards.
-- `/hapussalesforce kode_sf KONFIRMASI`: refuses every protected reference.
-- `/supervisors [after=KURSOR]`: active Supervisor options, A only.
-- `/penugasan [q=TOKEN] [after=KURSOR]`: assignment search, A only.
-- `/assignsupervisor kode_sf supervisor_user_id KONFIRMASI`: assign/reassign.
-- `/unassignsupervisor kode_sf KONFIRMASI`: remove responsibility.
+All quantities and money require safe nonnegative integers, including zero.
+Money accepts `1000000`, `1.000.000`, `Rp 1.000.000`, `Rp1.000.000`,
+`Rp. 1.000.000`, `rp 1.000.000`, `1 000 000`, with outer whitespace.
+Malformed grouping, decimals, negatives, arbitrary text, exponents and overflow
+are rejected. Booleans accept Y/Yes/Ya and N/No/Tidak, case-insensitively.
+Invalid answers repeat the current question without changing previous answers.
 
-No business rule is bypassed by Telegram; changes are immediately in the same D1
-used by Web. After uncertain transport failures, reconcile lists/audits before retrying.
+`/batal` cancels an uncommitted draft. After an uncertain submission,
+`/konfirmasi` recovers the same identifier, including across Worker restarts.
+No success is sent before persistence. Starting a genuinely new report requires
+an explicit `/salesvisit` after the old report is submitted/cancelled/expired.
+Visit fields do not replace product-level Stock Reports.
 
-## Excel user pre-registration (real Admin only)
+## Management and schedules
 
-- `/templatepengguna`: download the blank .xlsx template with separate examples.
-- Send .xlsx document with caption `/importpengguna`: authoritative validation/preview.
-- After reviewing, re-send with `/importpengguna KONFIRMASI`; append `ADMIN` if
-  the workbook contains Admin accounts. All rows are revalidated before saving.
-- Limits: 256 KiB, 50 users, four text columns; formulas/numeric identifiers rejected.
-- All-or-nothing account, Telegram identity and audit creation. Existing accounts
-  are never overwritten/reactivated. See [import workflow](user-import.md).
+All existing create/update/delete/assignment/import operations remain:
 
-## Visit submission and Demo Mode
+- `/tambahoutlet BUSINESS_ID NO_RS NAMA_OUTLET` (A).
+- `/editoutlet BUSINESS_ID NO_RS_BARU NAMA_OUTLET_BARU` (A).
+- `/hapusoutlet BUSINESS_ID KONFIRMASI` (A; refuses references).
+- `/editoutletinternal INTERNAL_ID NO_RS_BARU NAMA_OUTLET_BARU`,
+  `/hapusoutletinternal INTERNAL_ID KONFIRMASI` (A, exact legacy IDs).
+- `/jadwal [HARI|semua] [after=KURSOR]` (SF, own; default today Jakarta).
+- `/jadwalsales KODE_SF [HARI] [after=KURSOR]` (A/S, assigned team for S).
+- `/tambahjadwal KODE_SF INTERNAL_OUTLET_ID HARI` (A).
+- `/tambahsalesforce KODE_SF NAMA KONFIRMASI`,
+  `/editsalesforce KODE_SF NAMA_BARU KONFIRMASI`,
+  `/hapussalesforce KODE_SF KONFIRMASI` (A).
+- `/assignsupervisor KODE_SF SUPERVISOR_USER_ID KONFIRMASI`,
+  `/unassignsupervisor KODE_SF KONFIRMASI` (A).
+- `/templatepengguna`, .xlsx caption `/importpengguna`, then
+  `/importpengguna KONFIRMASI` (append `ADMIN` when importing Admins).
+  Existing 256-KiB/50-row limits, atomic validation and audits remain.
 
-`/salesvisit` starts/resumes the existing durable SF Visit wizard. Follow its
-outlet/time/notes/follow-up/optional-stock prompts; `/konfirmasi` saves or recovers
-the result; `/batal` discards an uncommitted draft. Idempotency is unchanged.
+Example: `/jadwalsales SF001 senin`. Code/day matching is case-insensitive;
+Indonesian days are senin, selasa, rabu, kamis, jumat, sabtu, minggu.
+Schedules remain plans, never evidence of a completed Visit.
 
-Real Admins can create an unlinked demo profile with
-`/tambahakundemo admin|supervisor|sales_force TOKEN_NAMA [kode_sf] KONFIRMASI`
-when demo support is enabled. Names with spaces use the token format below.
+## Demo and tokens
 
-`/demo`, `/demo_login account_id`, `/demo_status`, `/demo_logout` select isolated
-local/staging read-only credentials. No real identity is linked/replaced. All new
-reads use the same marked dataset as Web, with role/assignment scope. No writes or
-real user imports are permitted. See [Demo Mode](telegram-demo-mode.md).
+`/demo`, `/demo_login account_id`, `/demo_status`, `/demo_logout` preserve isolated
+local/staging read-only sessions. Real Admins retain
+`/tambahakundemo admin|supervisor|sales_force TOKEN_NAMA [KODE_SF] KONFIRMASI`.
+No Telegram identity is linked by demo login. Production rejects demo support.
 
-## Exact token format
+Simple command IDs/cursors use raw `[A-Za-z0-9_.-]+`; other exact values use `~`
+plus canonical unpadded base64url UTF-8. Copy returned continuations unchanged.
+The Visit wizard accepts the plain business ID rather than an internal token.
 
-Simple IDs/cursors are raw `[A-Za-z0-9_.-]+`. Other exact values (including search
-phrases with spaces) use `~` + canonical unpadded base64url UTF-8. No normalization
-or numeric conversion is performed. Example:
-
-```js
-const text = "Budi Santoso";
-console.log("~" + Buffer.from(text, "utf8").toString("base64url"));
-```
-
-Copy returned IDs/continuations exactly. Pages are live, not frozen exports.
-Plain-text replies are packed/split at logical boundaries below 4096 characters.
-
-## Development release
-
-Migration `0014_business_code_lookup.sql` adds only non-unique lookup indexes.
-Existing case collisions remain for manual review; no records or IDs are rewritten.
-
-```sh
-pnpm db:migrate:dev
-pnpm deploy:api:dev
-pnpm deploy:bot:dev
-pnpm deploy:web:dev
-```
-
-These commands target existing Development resources, never Production. Do not
-seed or reset business data. Migrate before API, then Bot and Web. See the full
-[implementation and testing notes](feature-updates-delivery.md).
+See [implementation, migration and Development deployment](sales-visit-update.md).

@@ -256,15 +256,15 @@ test("Telegram planning commands through actual BotIdentity binding and disposab
     "roles, inactive users, private chats and spoofed identity",
     async () => {
       for (const id of [4, 5, 6, 999]) {
-        assert.match(await command(id, "/outlets"), /Akses ditolak/);
+        assert.match(await command(id, "/carioutlet q=test"), /Akses ditolak/);
         assert.match(await command(id, "/outlet absent"), /Akses ditolak/);
         assert.match(
           await command(id, `/jadwalsales ${enc(sf)}`),
           /Akses ditolak/
         );
       }
-      assert.match(await command(1, "/outlets"), /Tidak ada Outlet/);
-      assert.match(await command(2, "/outlets"), /Tidak ada Outlet/);
+      assert.match(await command(1, "/carioutlet q=test"), /Tidak ada data/);
+      assert.match(await command(2, "/carioutlet q=test"), /Tidak ada data/);
       assert.match(
         await command(2, "/tambahoutlet denied 001 Forbidden"),
         /Akses ditolak/
@@ -281,7 +281,7 @@ test("Telegram planning commands through actual BotIdentity binding and disposab
       for (const id of [1, 2, 4, 5, 6, 999])
         assert.match(await command(id, "/jadwal"), /Akses ditolak/);
       assert.match(await command(3, "/jadwal"), /Tidak ada jadwal/);
-      assert.match(await command(3, "/outlets"), /Tidak ada Outlet/);
+      assert.match(await command(3, "/carioutlet q=test"), /Tidak ada data/);
       assert.match(await command(3, "/outlet absent"), /tidak ditemukan/);
       assert.match(
         await command(3, `/jadwalsales ${enc(sf)}`),
@@ -348,7 +348,7 @@ test("Telegram planning commands through actual BotIdentity binding and disposab
     for (const text of [
       "/outlet",
       "/outlet ~bad=",
-      "/outlets a b",
+      "/carioutlet a b",
       "/editoutlet simple",
       "/tambahoutlet",
       "/tambahoutlet " + "x".repeat(257),
@@ -473,13 +473,12 @@ test("Telegram planning commands through actual BotIdentity binding and disposab
           .bind(" outlet 😀 + ")
       );
       await db.batch(rows);
-      let result = await command(1, "/outlets");
-      assert.ok(sent.length > 1 && sent.length < 15);
-      let next = result.match(/Berikutnya: (\/outlets \S+)/)[1];
-      const cursor = dec(next.split(" ")[1]);
-      assert.ok(cursor.startsWith(" ") && cursor.endsWith(" "));
+      let result = await command(1, "/carioutlet q=unsafe");
+      assert.ok(sent.length <= 2);
+      let next = result.match(/Berikutnya: (\/carioutlet [^\n]+)/)[1];
+      assert.match(next, /q=unsafe offset=10/);
       result = await command(1, next);
-      assert.doesNotMatch(result, /Berikutnya/);
+      assert.match(result, /offset=20/);
       for (const [id, initial] of [
         [3, "/jadwal"],
         [2, `/jadwalsales ${enc(sf)} senin`],

@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { identifierSchema } from "./shared.ts";
 import { stockReportItemSchema } from "./stock-report.ts";
+import { visitReportSchema } from "./visit-report.ts";
 import { visitSchema } from "./visit.ts";
 
 // A fresh UUID per logical submission, retained across retries.
@@ -30,6 +31,7 @@ export const visitStockReportInputSchema = z.strictObject({
 });
 
 export const createVisitSchema = z.strictObject({
+  ...visitReportSchema.shape,
   // Exact opaque stored key: validate blankness, never resolve a trimmed alias.
   outletId: z.string().refine((id) => id.trim().length > 0),
   visitedAt: timestamp,

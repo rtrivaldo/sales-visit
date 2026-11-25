@@ -3,7 +3,7 @@ import {
   ClipboardTextIcon,
   MagnifyingGlassIcon,
 } from "@phosphor-icons/react";
-import type { VisitListItem } from "@sales-visit/contracts";
+import { formatRupiah, type VisitListItem } from "@sales-visit/contracts";
 import {
   Link,
   useLoaderData,
@@ -176,6 +176,44 @@ export function VisitsPage() {
                   { value: "without", label: "Tanpa laporan stok" },
                 ]}
               />
+              <FilterSelect
+                id="reportingWeek"
+                label="Periode laporan"
+                value={filters.reportingWeek}
+                onChange={(value) => update("reportingWeek", value)}
+                options={[1, 2, 3, 4].map((week) => ({
+                  value: String(week),
+                  label: `Minggu ke-${week}`,
+                }))}
+              />
+              <FilterSelect
+                id="reportingMonth"
+                label="Bulan laporan"
+                value={filters.reportingMonth}
+                onChange={(value) => update("reportingMonth", value)}
+                options={Array.from({ length: 12 }, (_, i) => ({
+                  value: String(i + 1),
+                  label: new Intl.DateTimeFormat("id-ID", {
+                    month: "long",
+                    timeZone: "Asia/Jakarta",
+                  }).format(
+                    new Date(Date.UTC(new Date().getUTCFullYear(), i, 15))
+                  ),
+                }))}
+              />
+              <Field>
+                <FieldLabel htmlFor="reportingYear">Tahun laporan</FieldLabel>
+                <Input
+                  id="reportingYear"
+                  key={filters.reportingYear}
+                  inputMode="numeric"
+                  defaultValue={filters.reportingYear}
+                  onBlur={(event) =>
+                    update("reportingYear", event.target.value)
+                  }
+                  placeholder="Semua"
+                />
+              </Field>
               <Field className="sm:col-span-2 xl:col-span-1">
                 <FieldLabel htmlFor="date">Tanggal kunjungan (WIB)</FieldLabel>
                 <Input
@@ -223,6 +261,7 @@ export function VisitsPage() {
                       <TableHead>Outlet / kunjungan</TableHead>
                       <TableHead>Sales Force</TableHead>
                       <TableHead>Waktu kunjungan</TableHead>
+                      <TableHead>Periode / Total Belanja</TableHead>
                       <TableHead>Kanal pelaporan</TableHead>
                       <TableHead>Laporan stok</TableHead>
                       <TableHead>
@@ -251,6 +290,15 @@ export function VisitsPage() {
                           <TableCell>{member.name}</TableCell>
                           <TableCell className="tabular-nums">
                             {formatTime(visit.visitedAt)}
+                          </TableCell>
+                          <TableCell>
+                            {visit.reportingWeek === undefined
+                              ? "—"
+                              : `Minggu ke-${visit.reportingWeek} · ${visit.reportingMonth}/${visit.reportingYear}`}
+                            <br />
+                            {visit.totalPurchase === undefined
+                              ? "—"
+                              : formatRupiah(visit.totalPurchase)}
                           </TableCell>
                           <TableCell>
                             <ChannelBadge channel={visit.submissionChannel} />
@@ -306,6 +354,15 @@ export function VisitsPage() {
                         {visit.id} · {formatTime(visit.visitedAt)} WIB
                       </div>
                       <p className="text-sm">{member.name}</p>
+                      <p className="text-sm">
+                        {visit.reportingWeek === undefined
+                          ? "Periode: —"
+                          : `Minggu ke-${visit.reportingWeek} · ${visit.reportingMonth}/${visit.reportingYear}`}{" "}
+                        ·{" "}
+                        {visit.totalPurchase === undefined
+                          ? "Belanja: —"
+                          : formatRupiah(visit.totalPurchase)}
+                      </p>
                       <div className="flex flex-wrap gap-2">
                         <ChannelBadge channel={visit.submissionChannel} />
                         <Badge variant="secondary">

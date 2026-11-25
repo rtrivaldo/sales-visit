@@ -4,6 +4,7 @@ import {
   MapPinIcon,
   UserIcon,
 } from "@phosphor-icons/react";
+import { visitReportSummary } from "@sales-visit/contracts";
 import { Link, useLoaderData, useSearch } from "@tanstack/react-router";
 
 import { ChannelBadge } from "@/components/channel-badge";
@@ -72,7 +73,9 @@ export function VisitDetailPage() {
               <MapPinIcon className="size-4" />
               Informasi Outlet
             </CardTitle>
-            <CardDescription>{outlet.id}</CardDescription>
+            <CardDescription>
+              {visit.outlet?.businessId ?? outlet.id}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <dl className="grid gap-4 text-sm">
@@ -159,6 +162,17 @@ export function VisitDetailPage() {
               </dd>
             </div>
           </dl>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle>Laporan kunjungan sales</CardTitle>
+          <CardDescription>
+            Nilai — berarti belum tersedia pada laporan lama.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="whitespace-pre-wrap">{visitReportSummary(visit)}</p>
         </CardContent>
       </Card>
       <section aria-labelledby="stock-heading" className="flex flex-col gap-4">

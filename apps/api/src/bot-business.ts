@@ -69,7 +69,7 @@ export async function botBusiness(
   if (
     !(reading
       ? reads.has(url.pathname) ||
-        /^\/(visits|sales-force)\/[^/]+$/.test(url.pathname) ||
+        /^\/(visits|sales-force|stock-reports)\/[^/]+$/.test(url.pathname) ||
         /^\/admin\/(users|sales-force|outlets)\/operations\/web:[^/]+$/.test(
           url.pathname
         )

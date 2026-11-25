@@ -1,6 +1,8 @@
 import {
   createStockReportSchema,
   createVisitSchema,
+  visitReportSchema,
+  reportingCalendar,
   idempotencyKeySchema,
   type StockReport,
   type SubmissionChannel,
@@ -27,6 +29,7 @@ export type TelegramVisitGuard = {
 export type TrustedIdentity = {
   salesForceId: string;
   submissionChannel: SubmissionChannel;
+  sessionHash?: string;
 };
 
 export class OperationError extends Error {
@@ -173,9 +176,22 @@ export async function createVisit(
       AND d.submission_key = ${telegram.draftKey} AND d.submission_key = ${key}
       AND d.step IN ('submitting', 'submitted')
   )`
-    : undefined;
+    : identity.sessionHash
+      ? sql`EXISTS (
+      SELECT 1 FROM web_sessions ws JOIN users u ON u.id = ws.user_id
+      JOIN telegram_identities t ON t.user_id = u.id
+      WHERE ws.token_hash = ${identity.sessionHash} AND ws.revoked_at IS NULL
+      AND ws.expires_at > unixepoch('subsec') * 1000
+      AND u.status = 'active' AND u.role = 'sales_force'
+      AND u.sales_force_id = ${identity.salesForceId}
+      AND (SELECT count(*) FROM users WHERE sales_force_id = u.sales_force_id) = 1
+    )`
+      : undefined;
   if (guard) {
-    if (identity.submissionChannel !== "telegram" || data.stockReport)
+    if (
+      telegram &&
+      (identity.submissionChannel !== "telegram" || data.stockReport)
+    )
       throw new OperationError(400, "Invalid Telegram submission");
     if (!(await db.get(sql`SELECT 1 WHERE ${guard}`)))
       throw new OperationError(401, "Unauthorized");
@@ -183,6 +199,8 @@ export async function createVisit(
   const id = await submissionId(identity, key, "visit");
   const visit: Visit = {
     id,
+    ...visitReportSchema.parse(data),
+    ...reportingCalendar(data.visitedAt),
     outletId: data.outletId,
     salesForceId: identity.salesForceId,
     submissionChannel: identity.submissionChannel,
@@ -218,8 +236,13 @@ export async function createVisit(
     // D1 batch is atomic; do not use unsupported interactive transactions.
     await db.batch([
       guard
-        ? db.insert(visits).select(sql`SELECT ${id}, ${visit.outletId},
-            ${visit.salesForceId}, ${Date.parse(visit.visitedAt)}, 'telegram',
+        ? db.insert(visits).select(sql`SELECT ${id},
+            ${visit.reportingWeek}, ${visit.reportingMonth}, ${visit.reportingYear},
+            ${visit.digiposBalance}, ${visit.perdanaSaStock}, ${visit.perdanaSaSelling}, ${visit.perdanaSaSellout},
+            ${visit.vfDataStock}, ${visit.vfDataSelling}, ${visit.vfDataSellout},
+            ${visit.vfVoiceStock}, ${visit.vfVoiceSelling}, ${visit.vfVoiceSellout},
+            ${visit.isCvmActive ? 1 : 0}, ${visit.isVoiceActive ? 1 : 0}, ${visit.isDigitalActive ? 1 : 0}, ${visit.totalPurchase}, ${visit.outletId},
+            ${visit.salesForceId}, ${Date.parse(visit.visitedAt)}, ${visit.submissionChannel},
             ${visit.notes ?? null}, ${visit.followUp ?? null}, ${Date.now()}
             WHERE ${guard}`)
         : db

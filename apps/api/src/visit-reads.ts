@@ -12,7 +12,18 @@ export function validReadQuery(c: Context<WebEnv>) {
   const paging = ["view", "limit", "offset"];
   const allowed =
     path === "/visits"
-      ? [...paging, "salesForceId", "outletId", "channel", "stock", "date", "q"]
+      ? [
+          ...paging,
+          "salesForceId",
+          "outletId",
+          "channel",
+          "stock",
+          "date",
+          "q",
+          "reportingWeek",
+          "reportingMonth",
+          "reportingYear",
+        ]
       : path === "/schedules"
         ? ["weekday", "salesForceId", "after"]
         : path === "/stock-reports"
@@ -22,6 +33,18 @@ export function validReadQuery(c: Context<WebEnv>) {
             : path.startsWith("/visits/")
               ? ["include"]
               : [];
+  for (const [key, max] of [
+    ["reportingWeek", 4],
+    ["reportingMonth", 12],
+    ["reportingYear", 9999],
+  ] as const) {
+    const value = query[key];
+    if (
+      value !== undefined &&
+      (!/^\d{1,4}$/.test(value) || Number(value) < 1 || Number(value) > max)
+    )
+      return false;
+  }
   if (query.include !== undefined && query.include !== "references")
     return false;
   if (Object.keys(query).some((key) => !allowed.includes(key))) return false;
@@ -68,6 +91,13 @@ export async function listVisits(c: Context<WebEnv>) {
   const reportScope = sql`report_scope.visit_id = ${visits.id} and ${operationalScope(user, sql`report_scope.reporter_sales_force_id`)}`;
   const hasReports = sql`exists (select 1 from stock_reports report_scope where ${reportScope})`;
   const conditions = [operationalScope(user, visits.salesForceId)];
+  for (const key of [
+    "reportingWeek",
+    "reportingMonth",
+    "reportingYear",
+  ] as const) {
+    if (q[key]) conditions.push(sql`${visits[key]} = ${Number(q[key])}`);
+  }
   if (q.salesForceId)
     conditions.push(sql`${visits.salesForceId} = ${q.salesForceId}`);
   if (q.outletId) conditions.push(sql`${visits.outletId} = ${q.outletId}`);
@@ -93,7 +123,7 @@ export async function listVisits(c: Context<WebEnv>) {
     offset: Number(q.offset ?? 0),
     orderBy: (t, { desc, asc }) => [desc(t.visitedAt), asc(t.id)],
     with: {
-      outlet: { columns: { id: true, name: true } },
+      outlet: { columns: { id: true, name: true, businessId: true } },
       salesForce: { columns: { id: true, name: true } },
     },
     extras: {
@@ -130,7 +160,7 @@ export async function visitDetail(c: Context<WebEnv>) {
         operationalScope(c.get("account").id, t.salesForceId)
       ),
     with: {
-      outlet: { columns: { id: true, name: true } },
+      outlet: { columns: { id: true, name: true, businessId: true } },
       salesForce: { columns: { id: true, name: true } },
       stockReports: {
         limit: 100,

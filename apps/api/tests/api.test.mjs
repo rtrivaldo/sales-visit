@@ -14,6 +14,7 @@ import {
 } from "@sales-visit/contracts";
 import { getPlatformProxy } from "wrangler";
 
+import { visitReport } from "../../../packages/contracts/tests/visit-fixture.mjs";
 import app, { createApp } from "../src/index.ts";
 
 const seed = readFileSync(
@@ -40,6 +41,7 @@ async function verifyWrites(t, env, json) {
     return identity;
   });
   const visit = {
+    ...visitReport,
     outletId: "out-01",
     visitedAt: "2026-11-04T09:00:00+07:00",
     notes: "Met owner",
@@ -469,6 +471,7 @@ test("read and write API against isolated local D1", async (t) => {
       method: "POST",
       headers: { "Idempotency-Key": crypto.randomUUID() },
       body: JSON.stringify({
+        ...visitReport,
         outletId: "out-01",
         visitedAt: "2026-11-04T00:00:00Z",
       }),
@@ -588,9 +591,11 @@ test("read and write API against isolated local D1", async (t) => {
     ]) {
       assert.equal(
         (await request(path, method)).status,
-        method === "POST" && ["/visits", "/stock-reports"].includes(path)
-          ? 401
-          : 404
+        method === "POST" && path === "/visits"
+          ? 403
+          : method === "POST" && path === "/stock-reports"
+            ? 401
+            : 404
       );
     }
   }

@@ -1,3 +1,4 @@
+import { visitReportSummary } from "@sales-visit/contracts";
 import type {
   BotIdentityService,
   DashboardOverview,
@@ -113,20 +114,40 @@ export function businessCommands(bot: Bot, api: BotIdentityService) {
       ]);
   });
   for (const [command, path, filters] of [
-    ["salesforce", "/sales-force", ["q", "offset"]],
     ["carioutlet", "/outlets", ["q", "offset"]],
     ["produk", "/products", ["q", "offset"]],
     [
       "riwayatvisit",
       "/visits",
-      ["q", "offset", "salesForceId", "outletId", "channel", "stock", "date"],
+      [
+        "q",
+        "offset",
+        "salesForceId",
+        "outletId",
+        "channel",
+        "stock",
+        "date",
+        "reportingWeek",
+        "reportingMonth",
+        "reportingYear",
+      ],
     ],
   ] as const)
     bot.command(command, async (ctx) => {
       const params = await parseOrUsage(
         ctx,
-        `Format: /${command} [${filters.map((key) => key + "=NILAI").join(" ")}]\nNilai dengan spasi: salin token dari bot.`,
-        () => parameters(ctx.match, [...filters])
+        `Format: /${command} ${filters
+          .filter((key) => key !== "offset")
+          .map((key) => key + "=NILAI")
+          .join(
+            " | "
+          )} [offset=ANGKA]\nIsi minimal satu filter. Nilai dengan spasi: salin token dari bot.`,
+        () => {
+          const search = parameters(ctx.match, [...filters]);
+          if (![...search.keys()].some((key) => key !== "offset"))
+            throw new Error("filter required");
+          return search;
+        }
       );
       if (!params) return;
       const query = new URLSearchParams(params);
@@ -209,15 +230,36 @@ export function businessCommands(bot: Bot, api: BotIdentityService) {
     );
     if (visit)
       await replyBlocks(ctx, [
-        `DETAIL VISIT ${displayId(visit.id)}\nSales Force: ${label(visit.member?.name ?? visit.salesForceId)}\nOutlet: ${label(visit.outlet?.name ?? visit.outletId)}\nWaktu: ${visit.visitedAt}\nKanal: ${visit.submissionChannel}\nCatatan: ${label(visit.notes ?? "—")}\nTindak lanjut: ${label(visit.followUp ?? "—")}`,
-        ...visit.stockReports.flatMap((report) => stock(report)),
+        `DETAIL VISIT ${displayId(visit.id)}\nSales Force: ${label(visit.member?.name ?? visit.salesForceId)}\nOutlet ID: ${label(visit.outlet?.businessId ?? visit.outletId)}\nNama Outlet: ${label(visit.outlet?.name ?? visit.outletId)}\nWaktu: ${visit.visitedAt}\nKanal: ${visit.submissionChannel}\nCatatan: ${label(visit.notes ?? "—")}\nTindak lanjut: ${label(visit.followUp ?? "—")}`,
+        visitReportSummary(visit),
+        `Laporan stok terkait: ${visit.stockReports.length}${visit.stockReports.length === 100 ? "+" : ""}`,
+        ...visit.stockReports
+          .slice(0, 5)
+          .map(
+            (report) =>
+              `${displayId(report.id)} · ${report.items.length} produk\nDetail: /detailstok ${displayId(report.id)}`
+          ),
+        ...(visit.stockReports.length > 5
+          ? [
+              `Lihat riwayat: /stockreport outletId=${displayId(visit.outletId)}`,
+            ]
+          : []),
       ]);
   });
   bot.command("stockreport", async (ctx) => {
     const params = await parseOrUsage(
       ctx,
-      "Format: /stockreport [salesForceId=KODE] [outletId=ID] [offset=ANGKA]",
-      () => parameters(ctx.match, ["salesForceId", "outletId", "offset"])
+      "Format: /stockreport outletId=ID atau salesForceId=KODE [offset=ANGKA]",
+      () => {
+        const search = parameters(ctx.match, [
+          "salesForceId",
+          "outletId",
+          "offset",
+        ]);
+        if (!search.has("salesForceId") && !search.has("outletId"))
+          throw new Error("filter required");
+        return search;
+      }
     );
     if (!params) return;
     const query = new URLSearchParams(params);
@@ -230,7 +272,10 @@ export function businessCommands(bot: Bot, api: BotIdentityService) {
     if (page)
       await replyBlocks(ctx, [
         `LAPORAN STOK — Total: ${page.total}`,
-        ...page.items.flatMap(stock),
+        ...page.items.map(
+          (report) =>
+            `${displayId(report.id)} · ${report.reportedAt}\nOutlet: ${displayId(report.outletId)} · ${report.items.length} produk\nDetail: /detailstok ${displayId(report.id)}`
+        ),
         ...(!page.items.length ? ["Tidak ada laporan stok."] : []),
         ...(Number(params.get("offset") ?? 0) + page.items.length < page.total
           ? [
@@ -244,24 +289,56 @@ export function businessCommands(bot: Bot, api: BotIdentityService) {
           : []),
       ]);
   });
+  bot.command("supervisor", async (ctx) => {
+    const id = ctx.match.trim();
+    if (!/^[1-9][0-9]{0,19}$/.test(id))
+      return ctx.reply("Penggunaan: /supervisor ID_TELEGRAM");
+    const page = await call<{ items: Row[] }>(
+      ctx,
+      `/supervisors?telegramId=${id}`
+    );
+    if (page)
+      await replyBlocks(
+        ctx,
+        page.items.length
+          ? page.items.map(record)
+          : ["Supervisor tidak ditemukan."]
+      );
+  });
+  bot.command("detailstok", async (ctx) => {
+    const id = await parseOrUsage(
+      ctx,
+      "Penggunaan: /detailstok ID_LAPORAN",
+      () => {
+        const tokens = args(ctx.match);
+        if (tokens.length !== 1) throw new Error("args");
+        return decodeToken(tokens[0]!);
+      }
+    );
+    if (!id) return;
+    const report = await call<NamedStockReport>(
+      ctx,
+      `/stock-reports/${encodeURIComponent(id)}`
+    );
+    if (report) await replyBlocks(ctx, stock(report));
+  });
   for (const [command, path] of [
-    ["supervisors", "/supervisors"],
     ["penugasan", "/supervisor-assignments"],
   ] as const)
     bot.command(command, async (ctx) => {
       const params = await parseOrUsage(
         ctx,
-        `Format: /${command} [after=KURSOR]${command === "penugasan" ? " [q=NAMA]" : ""}`,
-        () =>
-          parameters(
-            ctx.match,
-            command === "penugasan" ? ["after", "q"] : ["after"]
-          )
+        `Format: /${command} q=NAMA [after=KURSOR]`,
+        () => {
+          const search = parameters(ctx.match, ["after", "q"]);
+          if (!search.has("q")) throw new Error("filter required");
+          return search;
+        }
       );
       if (!params) return;
       const page = await call<{ items: Row[]; next: string | null }>(
         ctx,
-        `${path}?${params}`
+        `${path}?${params}&limit=5`
       );
       if (page)
         await replyBlocks(ctx, [

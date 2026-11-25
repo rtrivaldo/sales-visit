@@ -13,8 +13,8 @@ See [Live Operational Dashboard](./live-dashboard.md) for the new
 activation. Existing arrays and Visit detail remain compatible by default.
 Opt-in `view=page` lists add `{ items, total }` with server-side filtering and
 named references; Visit detail uses `include=references`. `GET /outlets/:id`
-projects stored master identifiers only. No new migration or HTTP report-write
-authorization is introduced. Unknown/duplicate/unsupported query parameters are
+projects stored master identifiers only. Migration 0015 and authenticated SF Visit
+writes are documented in [Sales Visit update](sales-visit-update.md). Unknown/duplicate/unsupported query parameters are
 rejected; bounded exact reference filters preserve legacy IDs.
 
 ## Shared schedule reads
@@ -38,7 +38,9 @@ access and response shapes. See [shared seed repair and bindings](telegram-demo-
 See [Web authentication and release setup](./web-auth.md) for Telegram
 OIDC, challenge/session contracts, CORS, role scoping and migration 0007.
 Only `/health` is public among the business GETs below. All others require a
-valid Web Bearer session; HTTP report writes remain denied even with a session.
+valid Web Bearer session. `POST /visits` permits real active SF sessions; demo,
+Admin and Supervisor sessions cannot submit. Standalone Stock Report HTTP writes
+retain their existing trusted-identity boundary.
 Admin can monitor all operational data; Supervisor sees only currently assigned
 Sales Force members' records (Stock Reports scoped independently by reporter).
 Sales Force cannot list Sales Force and can read only their own Visits/Stock Reports
@@ -59,7 +61,8 @@ Admin-only Web routes: `GET /supervisors`, `GET /supervisor-assignments`, and
 `PUT /supervisor-assignments` with `{ salesForceId: string, supervisorUserId: string | null }`.
 Sales Force IDs are sent exactly in JSON (not normalized URL path segments);
 legacy stored references and list cursors remain usable within bounded requests.
-They use the existing Bearer session; report POST endpoints remain denied.
+They use the existing Bearer session; administrative permissions do not confer
+Visit submission authority.
 
 | GET path         | JSON response                                            |
 | ---------------- | -------------------------------------------------------- |
@@ -100,8 +103,9 @@ curl -i http://localhost:8787/visits/unknown # 401 without session; 404 if autho
 
 No `/api` or version prefix. Both POST endpoints require an `Idempotency-Key`
 header containing a UUID generated once per logical submission. These requests
-are executable only through an explicitly injected trusted identity for now;
-ordinary local/production HTTP requests receive 401.
+use shared operations. `POST /visits` resolves live SF Bearer sessions and
+atomically rechecks them on insertion; `POST /stock-reports` retains its existing
+explicit trusted-identity boundary.
 
 ### `POST /visits`
 
@@ -109,6 +113,21 @@ ordinary local/production HTTP requests receive 401.
 {
   "outletId": "out-01",
   "visitedAt": "2026-11-04T09:00:00+07:00",
+  "reportingWeek": 1,
+  "digiposBalance": 1000000,
+  "perdanaSaStock": 0,
+  "perdanaSaSelling": 2,
+  "perdanaSaSellout": 3,
+  "vfDataStock": 0,
+  "vfDataSelling": 2,
+  "vfDataSellout": 3,
+  "vfVoiceStock": 0,
+  "vfVoiceSelling": 2,
+  "vfVoiceSellout": 3,
+  "isCvmActive": false,
+  "isVoiceActive": true,
+  "isDigitalActive": false,
+  "totalPurchase": 1884000,
   "notes": "Met owner",
   "followUp": "Call back",
   "stockReport": {
@@ -166,17 +185,18 @@ Errors use `{ "error": "Concise message" }`:
 `(request: Request, env: ApiBindings) => Promise<TrustedIdentity | undefined>`.
 It receives the current request and Worker bindings and returns
 `{ salesForceId, submissionChannel }` from a trusted authentication boundary.
-The default resolver still returns no identity; providing bindings does not
-enable writes.
+The injected resolver defaults to no identity. The deployed Visit route separately
+resolves real active SF sessions; bindings or spoofed attribution alone never
+enable a write.
 Business operations in `src/operations.ts` receive that context separately from
 the untrusted input, with no HTTP/authentication dependency. Tests construct a
 separate app with a fixed test identity; the resolver is not an HTTP endpoint,
 binding, header convention, environment flag, or dev-mode bypass.
 
-The default HTTP Worker calls `createApp()` **without a resolver** and always denies
-report writes before parsing a body or using D1. Authorization headers and spoofed
-identity headers cannot enable it. There is no fake login or test identity in
-the deployed entrypoint. Business reads require a valid Web session and live role/assignment scope.
+The deployed Visit route derives the SF/channel from a live Web session, never
+client JSON. Demo accounts without Telegram identities are read-only. There is
+no fake login or test identity in the deployed entrypoint. Business reads retain
+live role/assignment scope.
 
 ### Internal Bot identity RPC
 
@@ -219,8 +239,8 @@ existing SF and exactly one account reserving that SF is accepted; otherwise
 `association_unavailable`. Scalar subqueries avoid duplicate plans. Named SF
 filters still select the business plan; role/status/link changes do not move it.
 Private Schedule details add Outlet business ID/No. RS and nullable verified
-Telegram ID. Public `/outlets` still projects **only `{ id, name }`**; no other
-public response was expanded. No private RPC may be proxied without authorization.
+Telegram ID. Array `/outlets` still projects `{ id, name }`; its bounded
+`view=page` search additionally includes `businessId` for Visit selection. No private RPC may be proxied without authorization.
 
 Before separately approved API-before-Bot release, apply only pending
 `0006_windy_black_crow.sql` after backing up/verifying D1; 0005 is already deployed.
@@ -289,11 +309,11 @@ Cloudflare credentials, or changes to your dev database are required.
 
 `BotIdentity.visitWizard(actor, input)` is a private API-owned D1 state machine.
 Active, registered Sales Force with a current existing SF association can select
-an exact known Outlet, record actual Jakarta visit time, skip or enter notes and
-follow-up, review, cancel and confirm. No assignment is required. API derives the
+an Outlet by case-insensitive business ID, complete the new reporting fields,
+review, cancel and confirm. Month/year derive from the captured visit instant
+in Asia/Jakarta. No assignment is required. API derives the
 SF/channel; the Bot cannot supply either. `createVisit()` is reused with a frozen
-UUID/payload and an atomic current-account/draft guard in the insert. Public HTTP
-writes remain denied. Migration `0004_misty_red_skull.sql` must precede API, then
+UUID/payload and an atomic current-account/draft guard in the insert. Web Visit writes reuse the same operation and shared validation. Migration `0004_misty_red_skull.sql` must precede API, then
 Bot deployment. No remote migration/deployment is performed here.
 
 See the [Visit wizard guide](./design/telegram-visit-wizard.md) for RPC
@@ -305,9 +325,8 @@ trimming; independent Stock Report/Product normalization is unchanged.
 ## Remaining scope
 
 Web authentication, assignment-scoped reads, operational overview aggregates and
-bounded server-filtered Web lists are implemented. Web Visit/Stock Report
-submission and a dedicated Sales Force workspace remain deferred; public HTTP
-report writes stay denied. Telegram Visit submission checks registered identity,
+bounded server-filtered Web lists are implemented. Web Visit submission, an SF workspace and optional linked Stock Reports are now
+available; standalone HTTP Stock Report authentication is unchanged. Telegram Visit submission checks registered identity,
 current role/status and SF association at the private boundary and atomically at
 insertion. Monitoring assignment is not a submission eligibility rule. Telegram
 Stock Report UX and additional operational logging/rate-limit policy remain future

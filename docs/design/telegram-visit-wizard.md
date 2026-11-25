@@ -1,5 +1,11 @@
 # Authenticated Telegram Visit wizard
 
+> Historical design for the original minimal wizard. The question sequence,
+> business-ID lookup, Web write boundary and report fields are superseded by
+> [Sales Visit update](../sales-visit-update.md) and the
+> [current command reference](../telegram-bot-reference.md). Durable D1 revision,
+> cancellation, authorization and idempotency principles below remain applicable.
+
 Later account-lifecycle update: `/users`, `/setrole`, `/disable` and `/enable`
 now ship with audited API operations; see the [current parity handoff](telegram-bot-parity.md).
 The lifecycle exclusions below describe this wizard's original implementation

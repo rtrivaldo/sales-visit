@@ -1,0 +1,17 @@
+export const visitReport = {
+  reportingWeek: 1,
+  digiposBalance: 1000000,
+  perdanaSaStock: 0,
+  perdanaSaSelling: 2,
+  perdanaSaSellout: 3,
+  vfDataStock: 0,
+  vfDataSelling: 2,
+  vfDataSellout: 3,
+  vfVoiceStock: 0,
+  vfVoiceSelling: 2,
+  vfVoiceSellout: 3,
+  isCvmActive: false,
+  isVoiceActive: true,
+  isDigitalActive: false,
+  totalPurchase: 1884000,
+};
