@@ -1,5 +1,8 @@
 # API reference and implementation notes
 
+Current Sales additions: [shared operational summary, single-submit Web forms,
+Stock Report writes and demo refresh](sales-workspace.md).
+
 Detailed contracts and implementation notes moved from the API README. For local
 setup, see the [API README](../apps/api/README.md). For current authentication and
 permissions, see [Web authentication](web-auth.md) and the [live dashboard](live-dashboard.md).
@@ -39,8 +42,7 @@ See [Web authentication and release setup](./web-auth.md) for Telegram
 OIDC, challenge/session contracts, CORS, role scoping and migration 0007.
 Only `/health` is public among the business GETs below. All others require a
 valid Web Bearer session. `POST /visits` permits real active SF sessions; demo,
-Admin and Supervisor sessions cannot submit. Standalone Stock Report HTTP writes
-retain their existing trusted-identity boundary.
+Admin and Supervisor sessions cannot submit. Standalone Stock Report HTTP writes now use the same live SF session boundary.
 Admin can monitor all operational data; Supervisor sees only currently assigned
 Sales Force members' records (Stock Reports scoped independently by reporter).
 Sales Force cannot list Sales Force and can read only their own Visits/Stock Reports
@@ -104,8 +106,8 @@ curl -i http://localhost:8787/visits/unknown # 401 without session; 404 if autho
 No `/api` or version prefix. Both POST endpoints require an `Idempotency-Key`
 header containing a UUID generated once per logical submission. These requests
 use shared operations. `POST /visits` resolves live SF Bearer sessions and
-atomically rechecks them on insertion; `POST /stock-reports` retains its existing
-explicit trusted-identity boundary.
+atomically rechecks them on insertion; `POST /stock-reports` now accepts the same
+real-SF session authority, with an optional own-Visit reference.
 
 ### `POST /visits`
 
@@ -326,7 +328,7 @@ trimming; independent Stock Report/Product normalization is unchanged.
 
 Web authentication, assignment-scoped reads, operational overview aggregates and
 bounded server-filtered Web lists are implemented. Web Visit submission, an SF workspace and optional linked Stock Reports are now
-available; standalone HTTP Stock Report authentication is unchanged. Telegram Visit submission checks registered identity,
+available; standalone HTTP Stock Reports also accept authenticated real-SF sessions. Telegram Visit submission checks registered identity,
 current role/status and SF association at the private boundary and atomically at
 insertion. Monitoring assignment is not a submission eligibility rule. Telegram
 Stock Report UX and additional operational logging/rate-limit policy remain future

@@ -560,7 +560,7 @@ test("Web sessions and authorized reads on disposable local D1", async (t) => {
           400
         );
       assert.equal((await post("/visits", {}, admin.token)).status, 403);
-      assert.equal((await post("/stock-reports", {}, admin.token)).status, 401);
+      assert.equal((await post("/stock-reports", {}, admin.token)).status, 403);
     }
   );
   await t.test(

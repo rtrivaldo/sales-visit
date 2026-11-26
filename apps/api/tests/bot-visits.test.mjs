@@ -378,6 +378,10 @@ test("new Visit workflow: real webhook/RPC, durable D1, Web parity and Stock Rep
       const saved = await response.json();
       assert.equal(saved.reportingMonth, 12);
       assert.equal(saved.reportingYear, 2026);
+      assert.match(await command(3, "/summary"), /RINGKASAN SALES/);
+      assert.match(await command(2, "/summary"), /RINGKASAN SUPERVISOR/);
+      assert.match(await command(1, "/summary"), /RINGKASAN SISTEM/);
+      assert.match(await command(3, "/summary argument"), /Format: \/summary/);
       assert.equal(saved.stockReports.length, 1);
       assert.equal(saved.stockReports[0].items[0].quantity, 0);
       assert.match(

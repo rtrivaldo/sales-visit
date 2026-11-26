@@ -19,6 +19,7 @@ export type NamedStockReport = Omit<
   "items"
 > & {
   reporter: Reference | null;
+  outlet?: Reference | null;
   items: (import("./stock-report.ts").StockReportItem & {
     product: Reference | null;
   })[];
@@ -27,6 +28,13 @@ export type VisitDetail = NamedVisit & { stockReports: NamedStockReport[] };
 export type OutletReadDetail = Reference & {
   businessId: string | null;
   noRs: string | null;
+  scheduleWeekdays?: number[];
+  activity?: {
+    cvm: boolean | null;
+    voice: boolean | null;
+    digital: boolean | null;
+    visitedAt: string;
+  } | null;
 };
 export interface DashboardOverview {
   period: { start: string; end: string; timeZone: string };

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
+import { sampleSummary } from "../../../packages/contracts/tests/summary-fixture.mjs";
 import { businessCommands } from "../../bot/src/business/commands.ts";
 
 test("all new business commands map to shared API contracts, retain filters and require mutation confirmation", async () => {
@@ -18,18 +19,8 @@ test("all new business commands map to shared API contracts, retain filters and 
             operationId:
               "web:9999999999999:00000000-0000-4000-8000-000000000000",
           }
-        : path.pathname === "/dashboard/overview"
-          ? {
-              metrics: {
-                visits: 1,
-                outlets: 1,
-                salesForce: 1,
-                stockReports: 0,
-              },
-              dailyVisits: [{ date: "2026-06-12", count: 1 }],
-              channels: [{ channel: "web", count: 1 }],
-              recentVisits: [],
-            }
+        : path.pathname === "/dashboard/summary"
+          ? sampleSummary()
           : path.pathname === "/sales-force/SF001"
             ? { id: "SF001", name: "Budi" }
             : path.pathname === "/visits/V001"
@@ -115,8 +106,7 @@ test("all new business commands map to shared API contracts, retain filters and 
     return messages.join("\n");
   };
   for (const [name, match] of [
-    ["dashboard", ""],
-    ["carioutlet", "q=OUT001"],
+    ["summary", ""],
     ["detailsalesforce", "SF001"],
     [
       "riwayatvisit",
@@ -145,7 +135,6 @@ test("all new business commands map to shared API contracts, retain filters and 
     "detailsalesforce",
     "detailstok",
     "stockreport",
-    "carioutlet",
     "produk",
     "penugasan",
   ]) {
@@ -153,7 +142,12 @@ test("all new business commands map to shared API contracts, retain filters and 
     assert.match(await run(command, ""), /Format|Penggunaan/);
     assert.equal(calls.length, before);
   }
-  for (const command of ["salesforce", "supervisors"])
+  for (const command of [
+    "salesforce",
+    "supervisors",
+    "dashboard",
+    "carioutlet",
+  ])
     assert.equal(commands.has(command), false);
   assert.match(await run("penugasan", "q=Andi"), /q=Andi after=SF001/);
   for (const [command, args] of [

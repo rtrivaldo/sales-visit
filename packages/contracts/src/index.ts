@@ -1,5 +1,6 @@
 export * from "./visit-report.ts";
 export * from "./dashboard.ts";
+export * from "./summary.ts";
 export * from "./identity.ts";
 export * from "./visit-wizard.ts";
 export * from "./planning.ts";

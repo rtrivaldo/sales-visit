@@ -11,6 +11,10 @@ import {
 import { validateVisitSearch } from "@/features/visits/lib/filter-visits";
 
 const pages = [
+  { path: "/workspace", title: "Ringkasan Sales" },
+  { path: "/schedules", title: "Jadwal kunjungan" },
+  { path: "/stock-reports/new", title: "Input laporan stok" },
+  { path: "/stock-reports/", title: "Detail laporan stok", detail: true },
   { path: "/users", group: "Administrasi", title: "Pengguna & Akses" },
   {
     path: "/master/sales-force",
@@ -25,7 +29,7 @@ const pages = [
   {
     path: "/visits/new",
     group: "Kunjungan",
-    title: "Pelaporan Web belum tersedia",
+    title: "Input kunjungan",
     parent: "/visits",
   },
   {

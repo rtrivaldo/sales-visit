@@ -26,15 +26,13 @@ No schedule edit/delete operations are invented where Web does not provide them.
 
 ### Commands
 
-New:
-`dashboard`, `salesforce`, `detailsalesforce`, `tambahsalesforce`, `editsalesforce`,
-`hapussalesforce`, `supervisors`, `penugasan`, `assignsupervisor`,
-`unassignsupervisor`, `riwayatvisit`, `detailvisit`, `stockreport`, `carioutlet`,
-`produk`, `templatepengguna`, `importpengguna`, `tambahakundemo`.
-
-Modified: `start`, `me`, `help`, `users` (status filter and unlinked demo accounts),
-`outlets`/`outlet` (Web-equivalent catalog access), `jadwalsales`.
-Removed: internal outlet detail command only. Internal outlet edit/delete remain.
+Current commands: `summary`, `detailsalesforce`, `tambahsalesforce`,
+`editsalesforce`, `hapussalesforce`, `supervisor`, `penugasan`, `assignsupervisor`,
+`unassignsupervisor`, `riwayatvisit`, `detailvisit`, `stockreport`, `detailstok`,
+`produk`, `templatepengguna`, `importpengguna`, `tambahakundemo`, `user`, `outlet`
+and `jadwalsales`. Public Outlet mutations use business identifiers only.
+See the [current Sales workspace handoff](sales-workspace.md) and command reference;
+this document otherwise records the earlier parity milestone.
 
 `/jadwalsales kode_sf [hari]` requires the existing `sales_force.id` business code.
 No day means all recurring weekdays. Both code/day matching are case-insensitive;

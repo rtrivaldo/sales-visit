@@ -35,11 +35,11 @@ remove only `apps/api/.wrangler/state`, then rerun local migrations and seed.
 Never add `--remote` to local commands.
 
 `/health` is liveness only. Business reads require a valid Web session; public
-HTTP Visit writes require a real active Sales Force session and UUID
-`Idempotency-Key`. Standalone Stock Report writes retain their existing trusted
-identity boundary; linked reports may be submitted with a Visit. Local development
-does not bypass authentication. Demo accounts are read-only for report submission.
-See [Visit fields and migration 0015](../../docs/sales-visit-update.md).
+HTTP Visit and Stock Report writes require a real active Sales Force session and
+UUID `Idempotency-Key`, with transaction-time authority checks. Linked reports
+may also be submitted with a Visit. Demo accounts remain read-only.
+`GET /dashboard/summary` serves the same role-scoped aggregation to Web and Bot.
+See [Sales workspace, migration 0016 and demo refresh](../../docs/sales-workspace.md).
 See [demo/staging setup](../../docs/demo-environment.md) or
 [Telegram Admin setup](../bot/README.md#local-accounts).
 

@@ -2,9 +2,10 @@
 
 React + Vite dashboard with TanStack Router and shadcn/ui. Provides authenticated,
 role-based monitoring and administration. Real active Sales Force accounts can
-submit Visits at `/visits/new`, review before saving, and optionally attach a
-separate product-level Stock Report. Demo accounts remain read-only.
-See [Visit reporting and migration](../../docs/sales-visit-update.md).
+use a complete Sales workspace, schedules, a single-submit Visit form, visit history,
+standalone or linked Stock Reports, stock history/details and Outlet information.
+Demo accounts can explore and validate forms without persisting changes.
+See [Sales workspace and safe demo refresh](../../docs/sales-workspace.md).
 
 ## Local development
 

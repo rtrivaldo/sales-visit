@@ -33,7 +33,7 @@ With an already configured **dedicated test bot**, in private chat:
    authentication token). `/me` and `/help` reflect the selected role. `/demo_status` reports
    its internal User ID, role and remaining minutes. `/me`'s Telegram ID remains
    the verified sender, not a Telegram identity belonging to the demo account.
-3. Admin/Supervisor: `/outlets`, `/outlet BUSINESS_ID`, `/jadwalsales kode_sf`, `/dashboard`, `/riwayatvisit`, `/stockreport`.
+3. Admin/Supervisor: `/outlet BUSINESS_ID`, `/jadwalsales kode_sf`, `/summary`, `/riwayatvisit outletId=ID`, `/stockreport outletId=ID`.
    Supervisor schedule queries retain current team-assignment scope.
 4. Sales Force: `/jadwal semua` reads only its own synthetic schedules;
    monitoring/Admin commands remain forbidden.

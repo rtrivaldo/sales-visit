@@ -31,14 +31,9 @@ installCommands(
   {}
 );
 const general = ["start", "help", "me"];
-const monitor = [
-  "jadwalsales",
-  "outlet",
-  "carioutlet",
-  "dashboard",
-  "detailsalesforce",
-];
+const monitor = ["jadwalsales", "outlet", "detailsalesforce"];
 const reports = [
+  "summary",
   "riwayatvisit",
   "detailvisit",
   "stockreport",
@@ -59,8 +54,6 @@ const writes = [
   "tambahoutlet",
   "editoutlet",
   "hapusoutlet",
-  "editoutletinternal",
-  "hapusoutletinternal",
   "tambahjadwal",
   "tambahsalesforce",
   "editsalesforce",
@@ -103,10 +96,13 @@ test("minimal help lists only registered handlers authorized for each effective 
     "users",
     "supervisors",
     "salesforce",
+    "dashboard",
+    "carioutlet",
+    "editoutletinternal",
+    "hapusoutletinternal",
   ])
     assert.ok(!handlers.has(removed), removed);
-  assert.ok(handlers.has("editoutletinternal"));
-  assert.ok(handlers.has("hapusoutletinternal"));
+  assert.ok(handlers.has("summary"));
   check(null, undefined, [...general, "register"]);
   for (const status of ["pending", "disabled", "rejected"])
     check(account("admin", status), undefined, general);
@@ -121,7 +117,6 @@ test("minimal help lists only registered handlers authorized for each effective 
   check(account("sales_force"), undefined, [
     ...general,
     "jadwal",
-    "carioutlet",
     "outlet",
     ...reports,
     ...visit,
@@ -149,9 +144,7 @@ test("Demo role overrides real Admin and hides every write", () => {
       ...general,
       ...demoCommands,
       ...reports,
-      ...(role === "sales_force"
-        ? ["jadwal", "carioutlet", "outlet"]
-        : monitor),
+      ...(role === "sales_force" ? ["jadwal", "outlet"] : monitor),
       ...(role === "admin" ? assignments : []),
     ];
     check(account("admin"), selected, expected);

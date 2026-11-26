@@ -20,8 +20,11 @@ export function catalogQuery(q: string, offset: number) {
   if (q.trim()) query.set("q", q.trim());
   return query;
 }
-export const loadOutletDirectory = (q: string, offset: number) =>
-  api<ReadPage<Reference>>(`/outlets?${catalogQuery(q, offset)}`);
+export const loadOutletDirectory = (q: string, offset: number) => {
+  const query = catalogQuery(q, offset);
+  if (currentAccount()?.role === "sales_force") query.set("assigned", "own");
+  return api<ReadPage<Reference>>(`/outlets?${query}`);
+};
 export async function loadOutletDetail(
   outletId: string,
   visitOffset: number,
@@ -38,7 +41,7 @@ export async function loadOutletDetail(
       if (!(error instanceof ApiError && error.status === 403)) throw error;
     }
   }
-  const outlet =
+  const outlet: OutletReadDetail =
     managed ??
     (await api<OutletReadDetail>(`/outlets/${encodeURIComponent(outletId)}`));
   const query = new URLSearchParams({ view: "page", limit: "25", outletId });

@@ -25,7 +25,7 @@ Use Web user management for unlinked demo accounts. IDs remain strings.
 | `/supervisor ID_TELEGRAM`   | A; one active Supervisor                                           |
 | `/detailvisit ID_KUNJUNGAN` | A/S/SF; Visit, financial/reporting fields and linked Stock Reports |
 | `/detailstok ID_LAPORAN`    | A/S/SF; one independently authorized Stock Report                  |
-| `/dashboard`                | A/S; bounded 14-day activity summary                               |
+| `/summary`                  | A/S/SF; scoped daily/monthly operational summary                   |
 
 Missing identifiers produce usage instructions, never a list. Unknown/unauthorized
 records do not disclose restricted data. Visit/Stock Report scope is global for A,
@@ -41,7 +41,6 @@ Web lists and shared API/RPC listing operations remain available.
 At least one substantive filter is required (an offset/cursor alone is insufficient).
 Copy returned continuation commands, which preserve filters.
 
-- `/carioutlet q=NAMA [offset=ANGKA]`: ten authorized Outlet references.
 - `/produk q=NAMA [offset=ANGKA]`: ten product references.
 - `/riwayatvisit outletId=ID [offset=ANGKA]`: ten Visits; alternative filters:
   `q`, `salesForceId`, `channel=web|telegram`, `stock=with|without`,
@@ -91,8 +90,6 @@ All existing create/update/delete/assignment/import operations remain:
 - `/tambahoutlet BUSINESS_ID NO_RS NAMA_OUTLET` (A).
 - `/editoutlet BUSINESS_ID NO_RS_BARU NAMA_OUTLET_BARU` (A).
 - `/hapusoutlet BUSINESS_ID KONFIRMASI` (A; refuses references).
-- `/editoutletinternal INTERNAL_ID NO_RS_BARU NAMA_OUTLET_BARU`,
-  `/hapusoutletinternal INTERNAL_ID KONFIRMASI` (A, exact legacy IDs).
 - `/jadwal [HARI|semua] [after=KURSOR]` (SF, own; default today Jakarta).
 - `/jadwalsales KODE_SF [HARI] [after=KURSOR]` (A/S, assigned team for S).
 - `/tambahjadwal KODE_SF INTERNAL_OUTLET_ID HARI` (A).
@@ -120,4 +117,4 @@ Simple command IDs/cursors use raw `[A-Za-z0-9_.-]+`; other exact values use `~`
 plus canonical unpadded base64url UTF-8. Copy returned continuations unchanged.
 The Visit wizard accepts the plain business ID rather than an internal token.
 
-See [implementation, migration and Development deployment](sales-visit-update.md).
+See [Sales pages, summary rules, demo refresh and Development release](sales-workspace.md).

@@ -261,6 +261,7 @@ export function VisitsPage() {
                       <TableHead>Outlet / kunjungan</TableHead>
                       <TableHead>Sales Force</TableHead>
                       <TableHead>Waktu kunjungan</TableHead>
+                      <TableHead>Saldo Digipos</TableHead>
                       <TableHead>Periode / Total Belanja</TableHead>
                       <TableHead>Kanal pelaporan</TableHead>
                       <TableHead>Laporan stok</TableHead>
@@ -284,12 +285,18 @@ export function VisitsPage() {
                               {outlet.name}
                             </Link>
                             <span className="text-muted-foreground mt-1 block text-xs">
-                              {visit.id}
+                              {visit.id} ·{" "}
+                              {visit.outlet?.businessId ?? visit.outletId}
                             </span>
                           </TableCell>
                           <TableCell>{member.name}</TableCell>
                           <TableCell className="tabular-nums">
                             {formatTime(visit.visitedAt)}
+                          </TableCell>
+                          <TableCell>
+                            {visit.digiposBalance === undefined
+                              ? "—"
+                              : formatRupiah(visit.digiposBalance)}
                           </TableCell>
                           <TableCell>
                             {visit.reportingWeek === undefined
@@ -353,7 +360,16 @@ export function VisitsPage() {
                       <div className="text-muted-foreground text-xs">
                         {visit.id} · {formatTime(visit.visitedAt)} WIB
                       </div>
-                      <p className="text-sm">{member.name}</p>
+                      <p className="text-sm">
+                        {member.name} ·{" "}
+                        {visit.outlet?.businessId ?? visit.outletId}
+                      </p>
+                      <p className="text-sm">
+                        Saldo Digipos:{" "}
+                        {visit.digiposBalance === undefined
+                          ? "—"
+                          : formatRupiah(visit.digiposBalance)}
+                      </p>
                       <p className="text-sm">
                         {visit.reportingWeek === undefined
                           ? "Periode: —"

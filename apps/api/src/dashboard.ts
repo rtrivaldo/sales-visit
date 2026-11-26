@@ -3,12 +3,13 @@ import type { Context } from "hono";
 
 import { operationalScope } from "./read-scope.ts";
 import { toVisit } from "./records.ts";
+import { businessClock } from "./summary.ts";
 import type { WebEnv } from "./web-auth.ts";
 
 const day = 86400000;
 // Jakarta has no DST. Include today and the previous 13 calendar days.
 export function reportingWindow(now = Date.now()) {
-  const today = Math.floor((now + 7 * 3600000) / day) * day - 7 * 3600000;
+  const today = businessClock(now).start;
   return { start: today - 13 * day, end: today + day };
 }
 

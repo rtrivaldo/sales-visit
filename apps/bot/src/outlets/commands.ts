@@ -11,85 +11,75 @@ import {
   planningResult,
   replyBlocks,
 } from "../planning/shared.ts";
-
 function outlet(row: OutletDetail) {
-  return `Nama Outlet: ${label(row.name)}\nID Outlet Bisnis: ${row.businessId === null ? "belum didata" : displayId(row.businessId)}\nNo. RS: ${row.noRs === null ? "belum didata" : label(row.noRs)}${row.businessId === null ? `\nInternal ID/token: ${displayId(row.id)}` : ""}`;
+  return `Nama Outlet: ${label(row.name)}\nID Outlet: ${row.businessId === null ? "belum didata" : displayId(row.businessId)}\nNo. RS: ${row.noRs === null ? "belum didata" : label(row.noRs)}`;
 }
 export function outletCommands(bot: Bot, api: BotIdentityService) {
-  // Internal mutation commands remain explicit; public detail uses business ID only.
-  for (const internal of [false, true]) {
-    const suffix = internal ? "internal" : "";
-    const keyLabel = internal ? "INTERNAL_ID" : "BUSINESS_ID";
-    const key = (token: string) =>
-      internal
-        ? { id: decodeToken(token) }
-        : { businessId: decodeToken(token) };
-    if (!internal)
-      bot.command("outlet", async (ctx) => {
-        const input = await parseOrUsage(
-          ctx,
-          `Format: /outlet${suffix} ${keyLabel}`,
-          () => {
-            const tokens = args(ctx.match);
-            if (tokens.length !== 1) throw new Error("args");
-            return key(tokens[0]!);
-          }
-        );
-        if (!input) return;
-        const row = await planningResult(ctx, () =>
-          api.getOutlet(actor(ctx), input)
-        );
-        if (row)
-          await replyBlocks(ctx, [
-            "DETAIL OUTLET",
-            outlet(row),
-            `Internal ID/token (Visit/Jadwal): ${displayId(row.id)}`,
-          ]);
-      });
-    bot.command(`editoutlet${suffix}`, async (ctx) => {
-      const input = await parseOrUsage(
-        ctx,
-        `Format: /editoutlet${suffix} ${keyLabel} NO_RS_BARU NAMA_OUTLET_BARU`,
-        () => {
-          const match = /^(\S+)\s+(\S+)\s+([\s\S]+)$/.exec(ctx.match.trim());
-          if (!match) throw new Error("args");
-          return {
-            ...key(match[1]!),
-            noRs: decodeToken(match[2]!),
-            name: match[3]!,
-          };
-        }
-      );
-      if (!input) return;
-      const row = await planningResult(ctx, () =>
-        api.updateOutlet(actor(ctx), input)
-      );
-      if (row)
-        await replyBlocks(ctx, ["Outlet berhasil diperbarui.", outlet(row)]);
+  bot.command("outlet", async (ctx) => {
+    const input = await parseOrUsage(ctx, "Format: /outlet ID_OUTLET", () => {
+      const tokens = args(ctx.match);
+      if (tokens.length !== 1) throw new Error("args");
+      return { businessId: decodeToken(tokens[0]!) };
     });
-    bot.command(`hapusoutlet${suffix}`, async (ctx) => {
-      const input = await parseOrUsage(
-        ctx,
-        `Format: /hapusoutlet${suffix} ${keyLabel} KONFIRMASI (ketik kata KONFIRMASI persis)`,
-        () => {
-          const tokens = args(ctx.match);
-          if (tokens.length !== 2 || tokens[1] !== "KONFIRMASI")
-            throw new Error("args");
-          return key(tokens[0]!);
-        }
-      );
-      if (!input) return;
-      const row = await planningResult(ctx, () =>
-        api.deleteOutlet(actor(ctx), input)
-      );
-      if (row)
-        await replyBlocks(ctx, ["Outlet berhasil dihapus.", outlet(row)]);
-    });
-  }
+    if (!input) return;
+    const row = await planningResult(ctx, () =>
+      api.getOutlet(actor(ctx), input)
+    );
+    if (row) await replyBlocks(ctx, ["DETAIL OUTLET", outlet(row)]);
+  });
+  bot.command("editoutlet", async (ctx) => {
+    const input = await parseOrUsage(
+      ctx,
+      "Format: /editoutlet ID_OUTLET NO_RS_BARU NAMA_OUTLET_BARU",
+      () => {
+        const match = /^(\S+)\s+(\S+)\s+([\s\S]+)$/.exec(ctx.match.trim());
+        if (!match) throw new Error("args");
+        return {
+          businessId: decodeToken(match[1]!),
+          noRs: decodeToken(match[2]!),
+          name: match[3]!,
+        };
+      }
+    );
+    if (!input) return;
+    const resolved = await planningResult(ctx, () =>
+      api.getOutlet(actor(ctx), { businessId: input.businessId })
+    );
+    if (!resolved || resolved.businessId === null) return;
+    const row = await planningResult(ctx, () =>
+      api.updateOutlet(actor(ctx), {
+        ...input,
+        businessId: resolved.businessId,
+      })
+    );
+    if (row)
+      await replyBlocks(ctx, ["Outlet berhasil diperbarui.", outlet(row)]);
+  });
+  bot.command("hapusoutlet", async (ctx) => {
+    const input = await parseOrUsage(
+      ctx,
+      "Format: /hapusoutlet ID_OUTLET KONFIRMASI",
+      () => {
+        const tokens = args(ctx.match);
+        if (tokens.length !== 2 || tokens[1] !== "KONFIRMASI")
+          throw new Error("args");
+        return { businessId: decodeToken(tokens[0]!) };
+      }
+    );
+    if (!input) return;
+    const resolved = await planningResult(ctx, () =>
+      api.getOutlet(actor(ctx), input)
+    );
+    if (!resolved || resolved.businessId === null) return;
+    const row = await planningResult(ctx, () =>
+      api.deleteOutlet(actor(ctx), { businessId: resolved.businessId })
+    );
+    if (row) await replyBlocks(ctx, ["Outlet berhasil dihapus.", outlet(row)]);
+  });
   bot.command("tambahoutlet", async (ctx) => {
     const input = await parseOrUsage(
       ctx,
-      "Format: /tambahoutlet BUSINESS_ID NO_RS NAMA_OUTLET",
+      "Format: /tambahoutlet ID_OUTLET NO_RS NAMA_OUTLET",
       () => {
         const match = /^(\S+)\s+(\S+)\s+([\s\S]+)$/.exec(ctx.match.trim());
         if (!match) throw new Error("args");

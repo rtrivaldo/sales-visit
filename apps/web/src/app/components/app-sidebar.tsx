@@ -39,7 +39,25 @@ import { logout, useAccount, roleLabel } from "@/features/auth/session";
 
 const navigation = [
   {
-    title: "Ruang kerja",
+    title: "Jadwal kunjungan",
+    to: "/schedules",
+    icon: ClipboardTextIcon,
+    group: "Ruang kerja",
+  },
+  {
+    title: "Input kunjungan",
+    to: "/visits/new",
+    icon: ClipboardTextIcon,
+    group: "Ruang kerja",
+  },
+  {
+    title: "Input laporan stok",
+    to: "/stock-reports/new",
+    icon: NotebookIcon,
+    group: "Ruang kerja",
+  },
+  {
+    title: "Ringkasan Sales",
     to: "/workspace",
     icon: ChartBarIcon,
     group: "Ruang kerja",
@@ -118,8 +136,19 @@ export function AppSidebar() {
   const [error, setError] = useState("");
   const items = navigation.filter((item) =>
     account?.role === "sales_force"
-      ? item.to === "/workspace"
-      : item.to !== "/workspace" &&
+      ? item.to === "/workspace" ||
+        item.to === "/schedules" ||
+        item.to === "/visits/new" ||
+        item.to === "/stock-reports/new" ||
+        item.to === "/visits" ||
+        item.to === "/outlets" ||
+        ("kind" in item && item.kind !== "sales-force")
+      : ![
+          "/workspace",
+          "/schedules",
+          "/visits/new",
+          "/stock-reports/new",
+        ].includes(item.to) &&
         (item.group !== "Administrasi" || account?.role === "admin")
   );
   return (
@@ -162,7 +191,11 @@ export function AppSidebar() {
                       ? location.pathname === "/directory" &&
                         directoryKind === kind
                       : location.pathname === item.to ||
-                        location.pathname.startsWith(`${item.to}/`);
+                        (location.pathname.startsWith(`${item.to}/`) &&
+                          !(
+                            item.to === "/visits" &&
+                            location.pathname === "/visits/new"
+                          ));
                     return (
                       <SidebarMenuItem key={item.title}>
                         <SidebarMenuButton

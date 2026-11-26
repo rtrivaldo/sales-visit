@@ -50,7 +50,7 @@ export function OutletDetailPage() {
       </div>
       <div className="flex flex-col gap-2">
         <p className="text-muted-foreground text-xs break-all">
-          Detail Outlet · {outlet.id}
+          Detail Outlet · {outlet.businessId ?? "ID bisnis belum tersedia"}
         </p>
         <h1
           id="outlet-title"
@@ -90,6 +90,56 @@ export function OutletDetailPage() {
           </dl>
         </CardContent>
       </Card>
+      {account?.role === "sales_force" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Jadwal & aktivitas Outlet</CardTitle>
+            <CardDescription>
+              Aktivitas dari laporan terbaru milik Anda, bukan asumsi dari
+              jumlah kunjungan.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p>
+              Jadwal:{" "}
+              {outlet.scheduleWeekdays
+                ?.map(
+                  (day) =>
+                    [
+                      "Senin",
+                      "Selasa",
+                      "Rabu",
+                      "Kamis",
+                      "Jumat",
+                      "Sabtu",
+                      "Minggu",
+                    ][day - 1]
+                )
+                .join(", ") || "Belum dijadwalkan"}
+            </p>
+            <p>
+              CVM:{" "}
+              {outlet.activity?.cvm == null
+                ? "—"
+                : outlet.activity.cvm
+                  ? "Y"
+                  : "N"}{" "}
+              · Voice:{" "}
+              {outlet.activity?.voice == null
+                ? "—"
+                : outlet.activity.voice
+                  ? "Y"
+                  : "N"}{" "}
+              · Digital:{" "}
+              {outlet.activity?.digital == null
+                ? "—"
+                : outlet.activity.digital
+                  ? "Y"
+                  : "N"}
+            </p>
+          </CardContent>
+        </Card>
+      )}
       <Card>
         <CardHeader>
           <CardTitle>Riwayat kunjungan</CardTitle>

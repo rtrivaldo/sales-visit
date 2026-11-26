@@ -29,10 +29,16 @@ export function validReadQuery(c: Context<WebEnv>) {
         : path === "/stock-reports"
           ? [...paging, "salesForceId", "reporterSalesForceId", "outletId"]
           : ["/sales-force", "/outlets", "/products"].includes(path)
-            ? [...paging, ...(query.view === "page" ? ["q"] : [])]
+            ? [
+                ...paging,
+                ...(query.view === "page"
+                  ? ["q", ...(path === "/outlets" ? ["assigned"] : [])]
+                  : []),
+              ]
             : path.startsWith("/visits/")
               ? ["include"]
               : [];
+  if (query.assigned !== undefined && query.assigned !== "own") return false;
   for (const [key, max] of [
     ["reportingWeek", 4],
     ["reportingMonth", 12],

@@ -1,14 +1,13 @@
 import {
   createVisitSchema,
   parseVisitAnswer,
-  reportingCalendar,
   visitQuestions,
-  visitReportSummary,
   parseQuantity,
   type CreateVisit,
   type Visit,
   type OutletReadDetail,
 } from "@sales-visit/contracts";
+import { useSearch, Link } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -38,42 +37,105 @@ const sections = [
   "Total Belanja",
 ];
 export function NewVisitPage() {
-  const account = useAccount();
-  const [search, setSearch] = useState("");
-  const [options, setOptions] = useState<Outlet[]>([]);
-  const [selected, setSelected] = useState<Outlet | null>(null);
-  const [values, setValues] = useState<Record<string, string>>({});
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [error, setError] = useState("");
-  const [searchError, setSearchError] = useState("");
-  const [review, setReview] = useState<CreateVisit | null>(null);
-  const [pending, setPending] = useState(false);
-  const [saved, setSaved] = useState("");
-  const [allowed, setAllowed] = useState<boolean | null>(null);
-  const [includeStock, setIncludeStock] = useState(false);
-  const [rows, setRows] = useState<StockRow[]>([]);
-  const [catalog, setCatalog] = useState<{ id: string; name: string }[]>([]);
-  const [productSearch, setProductSearch] = useState("");
-  const [productError, setProductError] = useState("");
+  const account = useAccount(),
+    initial = useSearch({ from: "/dashboard/visits/new" }).outlet;
+  const [search, setSearch] = useState(""),
+    [options, setOptions] = useState<Outlet[]>([]),
+    [selected, setSelected] = useState<Outlet | null>(null);
+  const [values, setValues] = useState<Record<string, string>>({}),
+    [errors, setErrors] = useState<Record<string, string>>({}),
+    [error, setError] = useState(""),
+    [searchError, setSearchError] = useState("");
+  const [allowed, setAllowed] = useState<boolean | null>(null),
+    [pending, setPending] = useState(false),
+    [saved, setSaved] = useState("");
+  const [includeStock, setIncludeStock] = useState(false),
+    [rows, setRows] = useState<StockRow[]>([]),
+    [catalog, setCatalog] = useState<{ id: string; name: string }[]>([]),
+    [productSearch, setProductSearch] = useState(""),
+    [productError, setProductError] = useState("");
+  const sending = useRef(false),
+    key = useRef(crypto.randomUUID()),
+    frozen = useRef<CreateVisit | null>(null);
+  useEffect(() => {
+    let active = true;
+    void api<{ allowed: boolean }>("/visits/entry-permission")
+      .then((r) => {
+        if (active) setAllowed(r.allowed);
+      })
+      .catch(() => {
+        if (active)
+          setError(
+            "Izin pelaporan belum dapat diperiksa. Muat ulang untuk mencoba lagi."
+          );
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+  useEffect(() => {
+    if (!initial) return;
+    let active = true;
+    void api<OutletReadDetail>(`/outlets/${encodeURIComponent(initial)}`)
+      .then((r) => {
+        if (active) setSelected(r);
+      })
+      .catch(() => {
+        if (active)
+          setSearchError(
+            "Outlet dari jadwal tidak dapat diakses. Pilih Outlet lain."
+          );
+      });
+    return () => {
+      active = false;
+    };
+  }, [initial]);
+  useEffect(() => {
+    let active = true;
+    const timer = setTimeout(() => {
+      const q = new URLSearchParams({
+        view: "page",
+        limit: "20",
+        ...(search.trim() ? { q: search.trim() } : {}),
+      });
+      void api<{ items: Outlet[] }>(`/outlets?${q}`)
+        .then((r) => {
+          if (active) {
+            setOptions(r.items);
+            setSearchError("");
+          }
+        })
+        .catch(() => {
+          if (active)
+            setSearchError(
+              "Pencarian Outlet gagal. Ubah pencarian untuk mencoba lagi."
+            );
+        });
+    }, 250);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [search]);
   useEffect(() => {
     if (!includeStock) return;
     let active = true;
     const timer = setTimeout(() => {
-      const query = new URLSearchParams({
+      const q = new URLSearchParams({
         view: "page",
         limit: "100",
         ...(productSearch.trim() ? { q: productSearch.trim() } : {}),
       });
-      void api<{ items: { id: string; name: string }[] }>(`/products?${query}`)
-        .then((page) => {
+      void api<{ items: { id: string; name: string }[] }>(`/products?${q}`)
+        .then((r) => {
           if (active) {
-            setCatalog((previous) => [
-              ...previous.filter(
+            setCatalog((old) => [
+              ...old.filter(
                 (p) =>
-                  rows.some((r) => r.productId === p.id) &&
-                  !page.items.some((n) => n.id === p.id)
+                  rows.some((row) => row.productId === p.id) &&
+                  !r.items.some((n) => n.id === p.id)
               ),
-              ...page.items,
+              ...r.items,
             ]);
             setProductError("");
           }
@@ -90,52 +152,6 @@ export function NewVisitPage() {
       clearTimeout(timer);
     };
   }, [includeStock, productSearch, rows]);
-  useEffect(() => {
-    let active = true;
-    void api<{ allowed: boolean }>("/visits/entry-permission")
-      .then((result) => {
-        if (active) setAllowed(result.allowed);
-      })
-      .catch(() => {
-        if (active)
-          setError(
-            "Izin pelaporan belum dapat diperiksa. Muat ulang untuk mencoba lagi."
-          );
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
-  const request = useRef(false);
-  const key = useRef(crypto.randomUUID());
-  const frozen = useRef(false);
-  useEffect(() => {
-    let active = true;
-    const timer = setTimeout(() => {
-      const query = new URLSearchParams({
-        view: "page",
-        limit: "20",
-        ...(search.trim() ? { q: search.trim() } : {}),
-      });
-      void api<{ items: Outlet[] }>(`/outlets?${query}`)
-        .then((page) => {
-          if (active) {
-            setOptions(page.items);
-            setSearchError("");
-          }
-        })
-        .catch(() => {
-          if (active)
-            setSearchError(
-              "Pencarian Outlet gagal. Ubah pencarian untuk mencoba lagi."
-            );
-        });
-    }, 250);
-    return () => {
-      active = false;
-      clearTimeout(timer);
-    };
-  }, [search]);
   const update = (field: string, value: string) =>
     setValues((old) => ({ ...old, [field]: value }));
   const input = (question: (typeof visitQuestions)[number]) => {
@@ -162,27 +178,25 @@ export function NewVisitPage() {
           }
         />
       );
+    const props = {
+      id: field,
+      value: values[field] ?? "",
+      "aria-invalid": !!errors[field],
+      "aria-describedby": errors[field] ? `${field}-error` : undefined,
+    };
     return (
       <Field key={field} data-invalid={!!errors[field]}>
-        <FieldLabel htmlFor={field}>
-          {label} {kind === "currency" ? "(Rp)" : ""} (wajib)
-        </FieldLabel>
+        <FieldLabel htmlFor={field}>{label} (wajib)</FieldLabel>
         {kind === "currency" ? (
           <RupiahInput
-            id={field}
-            value={values[field] ?? ""}
-            aria-invalid={!!errors[field]}
-            aria-describedby={errors[field] ? `${field}-error` : undefined}
+            {...props}
             onValueChange={(value) => update(field, value)}
           />
         ) : (
           <Input
-            id={field}
+            {...props}
             inputMode="numeric"
-            value={values[field] ?? ""}
-            aria-invalid={!!errors[field]}
-            aria-describedby={errors[field] ? `${field}-error` : undefined}
-            onChange={(event) => update(field, event.target.value)}
+            onChange={(e) => update(field, e.target.value)}
           />
         )}
         {errors[field] && (
@@ -191,84 +205,80 @@ export function NewVisitPage() {
       </Field>
     );
   };
-  function prepare() {
+  function validate(): CreateVisit | undefined {
     const data: Record<string, unknown> = {
       outletId: selected?.id,
       visitedAt: new Date().toISOString(),
     };
     for (const [field] of visitQuestions)
       data[field] = parseVisitAnswer(field, values[field] ?? "");
+    const nextErrors: Record<string, string> = {};
     if (includeStock) {
-      const stockErrors: Record<string, string> = {};
       const seen = new Set<string>();
       for (const row of rows) {
         if (
-          !row.productId ||
           !catalog.some((p) => p.id === row.productId) ||
           seen.has(row.productId)
         )
-          stockErrors[`${row.id}.product`] =
-            "Pilih satu produk yang berbeda untuk setiap baris.";
+          nextErrors[`${row.id}.product`] =
+            "Pilih produk yang berbeda untuk setiap baris.";
         seen.add(row.productId);
         if (parseQuantity(row.quantity) === undefined)
-          stockErrors[`${row.id}.quantity`] =
+          nextErrors[`${row.id}.quantity`] =
             "Isi bilangan bulat nol atau lebih.";
       }
-      if (!rows.length) stockErrors.rows = "Tambahkan minimal satu produk.";
-      if (Object.keys(stockErrors).length) {
-        setErrors(stockErrors);
-        return;
-      }
+      if (!rows.length) nextErrors.rows = "Tambahkan minimal satu produk.";
       data.stockReport = {
         reportedAt: data.visitedAt,
-        items: rows.map((row) => ({
-          productId: row.productId,
-          quantity: parseQuantity(row.quantity),
+        items: rows.map((r) => ({
+          productId: r.productId,
+          quantity: parseQuantity(r.quantity),
         })),
       };
     }
     const parsed = createVisitSchema.safeParse(data);
-    if (!parsed.success) {
-      setErrors(
-        Object.fromEntries(
-          parsed.error.issues.map((issue) => [
-            String(issue.path[0]),
-            "Wajib diisi dengan nilai yang valid.",
-          ])
-        )
+    if (!parsed.success)
+      for (const issue of parsed.error.issues)
+        nextErrors[String(issue.path[0])] =
+          "Wajib diisi dengan nilai yang valid.";
+    setErrors(nextErrors);
+    setError("");
+    return !Object.keys(nextErrors).length && parsed.success
+      ? parsed.data
+      : undefined;
+  }
+  async function submit(data: CreateVisit) {
+    if (sending.current) return;
+    if (!allowed) {
+      setError(
+        "Pratinjau valid. Demo Mode hanya baca; tidak ada data disimpan."
       );
       return;
     }
-    setErrors({});
-    setError("");
-    setReview(parsed.data);
-  }
-  async function save() {
-    if (!review || request.current) return;
-    request.current = true;
-    frozen.current = true;
+    sending.current = true;
+    frozen.current = data;
     setPending(true);
     setError("");
     try {
       const visit = await api<Visit>("/visits", {
         method: "POST",
         headers: { "Idempotency-Key": key.current },
-        body: JSON.stringify(review),
+        body: JSON.stringify(data),
       });
       setSaved(visit.id);
     } catch (cause) {
       if (cause instanceof ApiError && [400, 403, 404].includes(cause.status)) {
-        frozen.current = false;
+        frozen.current = null;
         key.current = crypto.randomUUID();
         setError(
-          "Data atau izin pelaporan tidak valid. Jawaban tetap tersimpan; periksa sebelum mencoba lagi."
+          "Data atau izin tidak valid. Jawaban tetap tersimpan; periksa lalu coba lagi."
         );
       } else
         setError(
-          "Penyimpanan belum dapat dipastikan. Coba simpan lagi dengan data yang sama; tidak akan membuat duplikat."
+          "Hasil penyimpanan belum dapat dipastikan. Coba simpan lagi dengan data yang sama; duplikat dicegah."
         );
     } finally {
-      request.current = false;
+      sending.current = false;
       setPending(false);
     }
   }
@@ -276,86 +286,59 @@ export function NewVisitPage() {
     return <p>Pelaporan hanya tersedia untuk Sales Force.</p>;
   if (allowed === null)
     return <p role="status">{error || "Memeriksa izin pelaporan…"}</p>;
-  if (!allowed)
-    return (
-      <p>
-        Demo Mode hanya baca. Pelaporan memerlukan akun Sales Force Telegram
-        aktif.
-      </p>
-    );
   if (saved)
     return (
-      <div role="status">
-        Kunjungan berhasil disimpan. ID: {saved}
-        <br />
+      <section className="flex flex-col gap-4">
+        <p role="status">Kunjungan berhasil disimpan. ID: {saved}</p>
         <Button
+          nativeButton={false}
+          render={
+            <Link
+              to="/visits/$visitId"
+              params={{ visitId: saved }}
+              search={{}}
+            />
+          }
+        >
+          Lihat laporan
+        </Button>
+        <Button
+          variant="outline"
           onClick={() => {
             setSaved("");
-            setReview(null);
             setValues({});
-            setIncludeStock(false);
             setRows([]);
-            setSelected(null);
+            setIncludeStock(false);
+            frozen.current = null;
             key.current = crypto.randomUUID();
-            frozen.current = false;
           }}
         >
           Laporan baru
         </Button>
-      </div>
+      </section>
     );
   return (
-    <section className="flex max-w-3xl flex-col gap-6">
+    <section className="flex max-w-3xl flex-col gap-5">
       <h1 className="text-2xl font-semibold">Laporan kunjungan sales</h1>
+      {!allowed && (
+        <p role="status">
+          Demo Mode hanya baca. Anda dapat mencoba formulir tanpa menyimpan.
+        </p>
+      )}
       {error && <p role="alert">{error}</p>}
-      {review ? (
-        <>
-          <h2>Konfirmasi kunjungan</h2>
-          <p>
-            Outlet ID: {selected?.businessId ?? selected?.id}
-            <br />
-            Nama Outlet: {selected?.name}
-          </p>
-          <p className="whitespace-pre-wrap">
-            {visitReportSummary({
-              ...review,
-              ...reportingCalendar(review.visitedAt),
-            })}
-          </p>
-          {review.stockReport && (
-            <section>
-              <h3>Laporan Stok terpisah (terkait kunjungan)</h3>
-              <ul>
-                {review.stockReport.items.map((item) => (
-                  <li key={item.productId}>
-                    {catalog.find((p) => p.id === item.productId)?.name ??
-                      item.productId}
-                    : {item.quantity}
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-          <Button disabled={pending} onClick={() => void save()}>
-            {pending ? "Menyimpan…" : "Konfirmasi dan simpan"}
-          </Button>
-          <Button
-            variant="outline"
-            disabled={pending || frozen.current}
-            onClick={() => setReview(null)}
+      <form
+        noValidate
+        onSubmit={(e) => {
+          e.preventDefault();
+          const data = frozen.current ?? validate();
+          if (data) void submit(data);
+        }}
+      >
+        <FieldGroup>
+          <fieldset
+            disabled={pending || !!frozen.current}
+            className="flex min-w-0 flex-col gap-6"
           >
-            Ubah jawaban
-          </Button>
-        </>
-      ) : (
-        <form
-          noValidate
-          onSubmit={(event) => {
-            event.preventDefault();
-            prepare();
-          }}
-        >
-          <FieldGroup>
             <FieldSet>
               <FieldLegend>Informasi Outlet</FieldLegend>
               <Field>
@@ -365,7 +348,7 @@ export function NewVisitPage() {
                 <Input
                   id="outlet-search"
                   value={search}
-                  onChange={(event) => setSearch(event.target.value)}
+                  onChange={(e) => setSearch(e.target.value)}
                 />
                 {searchError && <FieldError>{searchError}</FieldError>}
               </Field>
@@ -387,17 +370,6 @@ export function NewVisitPage() {
                   label: `${o.businessId ?? o.id} — ${o.name}`,
                 }))}
               />
-              <p className="text-muted-foreground text-sm">
-                Maksimal 20 hasil. Persempit pencarian jika Outlet belum
-                terlihat.
-              </p>
-              {selected && (
-                <p>
-                  ID Outlet: {selected.businessId ?? selected.id}
-                  <br />
-                  Nama Outlet: {selected.name}
-                </p>
-              )}
               {input(visitQuestions[0])}
             </FieldSet>
             {sections.map((section) => (
@@ -417,7 +389,7 @@ export function NewVisitPage() {
               enabled={includeStock}
               rows={rows}
               errors={errors}
-              onToggle={() => setIncludeStock((value) => !value)}
+              onToggle={() => setIncludeStock((v) => !v)}
               onChange={setRows}
             />
             {includeStock && (
@@ -428,15 +400,21 @@ export function NewVisitPage() {
                 <Input
                   id="product-search"
                   value={productSearch}
-                  onChange={(event) => setProductSearch(event.target.value)}
+                  onChange={(e) => setProductSearch(e.target.value)}
                 />
                 {productError && <FieldError>{productError}</FieldError>}
               </Field>
             )}
-            <Button type="submit">Tinjau laporan</Button>
-          </FieldGroup>
-        </form>
-      )}
+          </fieldset>
+          <Button type="submit" disabled={pending}>
+            {pending
+              ? "Menyimpan…"
+              : allowed
+                ? "Simpan laporan kunjungan"
+                : "Periksa formulir demo"}
+          </Button>
+        </FieldGroup>
+      </form>
     </section>
   );
 }

@@ -1,5 +1,9 @@
 # Sales Visit reporting update
 
+> The single-submit Web form, completed Sales pages, standalone Stock Reports and
+> refreshed demo workflow now supersede the earlier rollout descriptions below.
+> See [current Sales workspace handoff](sales-workspace.md).
+
 This is the current implementation handoff, superseding the original minimal
 Telegram wizard and deferred Web-submission notes. No deployment, remote
 migration, database reset, commit or push is part of this change.
@@ -113,7 +117,7 @@ return usage, never a collection. Outlet lookup uses case-insensitive business I
 keeps leading zeros and rejects ambiguity. Existing `/detailsalesforce` is reused
 rather than introducing an overlapping `/salesforce` detail alias.
 
-Filtered collections `/carioutlet`, `/produk`, `/riwayatvisit`, `/stockreport` require
+Filtered collections `/produk`, `/riwayatvisit`, `/stockreport` require
 a search/owner/date/reporting filter and return ten records per page. Stock history
 and Visit-linked stock are concise references, not bulk product-item dumps; use
 `/detailstok` for the requested report's items. `/penugasan`

@@ -10,6 +10,23 @@ import {
   unique,
 } from "drizzle-orm/sqlite-core";
 
+export const demoFixtureState = sqliteTable(
+  "demo_fixture_state",
+  {
+    tableName: text("table_name").notNull(),
+    recordKey: text("record_key").notNull(),
+    recordJson: text("record_json").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.tableName, table.recordKey] }),
+    check(
+      "demo_fixture_state_table",
+      sql`${table.tableName} IN ('users','sales_force','sales_force_supervisors','outlets','products','visit_schedules','visits','stock_reports','stock_report_items')`
+    ),
+    check("demo_fixture_state_json", sql`json_valid(${table.recordJson})`),
+  ]
+);
+
 // IDs are supplied by the caller (for example crypto.randomUUID()).
 const id = () => text("id").primaryKey().notNull();
 const demoOnly = () => integer("demo_only").notNull().default(0);

@@ -99,7 +99,19 @@ async function setup(t) {
       const response = await request(`/schedules?${query}`, token);
       assert.equal(response.status, 200);
       const web = await response.json();
-      assert.deepEqual(web, bot.data); // Same query, projection, scopes and cursors.
+      assert.equal(typeof web.today, "string");
+      assert.ok(
+        web.items.every((row) => typeof row.completedToday === "boolean")
+      );
+      assert.deepEqual(
+        {
+          items: web.items.map(
+            ({ completedToday: _completedToday, ...row }) => row
+          ),
+          next: web.next,
+        },
+        bot.data
+      ); // Same references/scopes; Web adds today's completion status.
       all.push(...web.items);
       after = web.next;
     } while (after);

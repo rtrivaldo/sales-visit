@@ -1,3 +1,8 @@
+import type {
+  OperationalSummary,
+  WebSchedulePage,
+  NamedStockReport,
+} from "@sales-visit/contracts";
 import {
   createRootRoute,
   createRoute,
@@ -26,6 +31,7 @@ import { LoginPage } from "@/features/auth/pages/login-page";
 import { WorkspacePage } from "@/features/auth/pages/workspace-page";
 import {
   ApiError,
+  api,
   currentAccount,
   restoreSession,
   safeReturn,
@@ -49,6 +55,8 @@ import {
   masterSearch,
 } from "@/features/sales-force-management/data";
 import { SalesForceManagementPage } from "@/features/sales-force-management/page";
+import { StockDetailPage } from "@/features/stock-reports/pages/stock-detail-page";
+import { StockEntryPage } from "@/features/stock-reports/pages/stock-entry-page";
 import { AssignmentsPage } from "@/features/supervisor-assignments/pages/assignments-page";
 import { loadUsers, userSearch } from "@/features/user-management/data";
 import { UserManagementPage } from "@/features/user-management/page";
@@ -58,6 +66,7 @@ import {
 } from "@/features/visits/lib/filter-visits";
 import { loadVisits, loadVisit } from "@/features/visits/lib/visit-reads";
 import { NewVisitPage } from "@/features/visits/pages/new-visit-page";
+import { SchedulesPage } from "@/features/visits/pages/schedules-page";
 import { VisitDetailPage } from "@/features/visits/pages/visit-detail-page";
 import { VisitsPage } from "@/features/visits/pages/visits-page";
 
@@ -121,7 +130,9 @@ const dashboardRoute = createRoute({
     if (
       account.role === "sales_force" &&
       location.pathname !== "/workspace" &&
-      !/^\/(visits|outlets)(?:\/|$)/.test(location.pathname)
+      !/^\/(visits|outlets|stock-reports|schedules|directory)(?:\/|$)/.test(
+        location.pathname
+      )
     )
       throw redirect({ to: "/workspace", replace: true });
     if (account.role !== "sales_force" && location.pathname === "/workspace")
@@ -150,7 +161,62 @@ const indexRoute = createRoute({
 const workspaceRoute = createRoute({
   getParentRoute: () => dashboardRoute,
   path: "/workspace",
+  loader: () => api<OperationalSummary>("/dashboard/summary"),
+  pendingComponent: OperationalPending,
+  errorComponent: OperationalError,
   component: WorkspacePage,
+});
+const schedulesRoute = createRoute({
+  getParentRoute: () => dashboardRoute,
+  path: "/schedules",
+  validateSearch: (
+    search: SearchSchemaInput & { weekday?: string; after?: string }
+  ) => ({
+    weekday:
+      typeof search.weekday === "string" &&
+      /^(today|all|[1-7])$/.test(search.weekday)
+        ? search.weekday
+        : "today",
+    after: typeof search.after === "string" ? search.after : "",
+  }),
+  loaderDeps: ({ search }) => search,
+  loader: ({ deps }) => {
+    const weekday =
+      deps.weekday === "today"
+        ? String(new Date(Date.now() + 7 * 3600000).getUTCDay() || 7)
+        : deps.weekday;
+    const q = new URLSearchParams({
+      ...(weekday === "all" ? {} : { weekday }),
+      ...(deps.after ? { after: deps.after } : {}),
+    });
+    return api<WebSchedulePage>(`/schedules?${q}`);
+  },
+  pendingComponent: OperationalPending,
+  errorComponent: OperationalError,
+  component: SchedulesPage,
+});
+const stockEntryRoute = createRoute({
+  getParentRoute: () => dashboardRoute,
+  path: "/stock-reports/new",
+  component: StockEntryPage,
+  beforeLoad: () => {
+    if (currentAccount()?.role !== "sales_force")
+      throw redirect({ to: "/overview", replace: true });
+  },
+});
+const stockDetailRoute = createRoute({
+  getParentRoute: () => dashboardRoute,
+  path: "/stock-reports/$reportId",
+  loader: ({ params }) =>
+    orNotFound(
+      api<NamedStockReport>(
+        `/stock-reports/${encodeURIComponent(params.reportId)}`
+      )
+    ),
+  pendingComponent: OperationalPending,
+  errorComponent: OperationalError,
+  notFoundComponent: NotFoundPage,
+  component: StockDetailPage,
 });
 const overviewRoute = createRoute({
   getParentRoute: () => dashboardRoute,
@@ -189,6 +255,13 @@ const detailRoute = createRoute({
 const directoryRoute = createRoute({
   getParentRoute: () => dashboardRoute,
   path: "/directory",
+  beforeLoad: ({ search }) => {
+    if (
+      currentAccount()?.role === "sales_force" &&
+      search.kind === "sales-force"
+    )
+      throw redirect({ to: "/workspace", replace: true });
+  },
   validateSearch: (
     search: SearchSchemaInput & {
       kind?: DirectoryKind;
@@ -288,6 +361,9 @@ export const router = createRouter({
     loginRoute,
     dashboardRoute.addChildren([
       workspaceRoute,
+      schedulesRoute,
+      stockEntryRoute,
+      stockDetailRoute,
       overviewRoute,
       assignmentsRoute,
       usersRoute,

@@ -821,7 +821,7 @@ test("registration, authorization and verified webhook across real Worker RPC + 
         );
         await webhook(900, `/disable ${loser}`);
         assert.match(sent.at(-1).text, /dinonaktifkan/);
-        await webhook(loser, "/carioutlet q=test");
+        await webhook(loser, "/outlet missing");
         assert.match(sent.at(-1).text, /Akses ditolak/);
         await webhook(900, `/enable ${loser}`);
         assert.match(sent.at(-1).text, /aktif kembali/);
@@ -975,7 +975,7 @@ test("registration, authorization and verified webhook across real Worker RPC + 
               "/tambahoutlet",
               "/editoutlet",
               "/hapusoutlet",
-              "/carioutlet",
+              "/summary",
               "/tambahjadwal",
             ])
               assert.match(guide, new RegExp(`^${command}(?: | —)`, "m"));

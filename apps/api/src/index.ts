@@ -21,6 +21,7 @@ import { outletManagementRoutes } from "./outlet-management.ts";
 import { operationalScope } from "./read-scope.ts";
 import { toStockReport } from "./records.ts";
 import { salesForceManagementRoutes } from "./sales-force-management.ts";
+import { operationalSummary } from "./summary.ts";
 import { supervisorAssignmentRoutes } from "./supervisor-assignments.ts";
 import { userImportRoutes } from "./user-import.ts";
 import { listVisits, validReadQuery, visitDetail } from "./visit-reads.ts";
@@ -94,7 +95,7 @@ export function createApp(
     app.post(path, async (c) => {
       try {
         let identity = await resolveIdentity(c.req.raw, c.env);
-        if (!identity && path === "/visits") {
+        if (!identity) {
           const account = await sessionAccount(c.req.raw, c.env.DB);
           if (!account) return c.json({ error: "Unauthorized" }, 401);
           // Demo personas have no Telegram identity and remain read-only.
@@ -174,6 +175,7 @@ export function createApp(
     await next();
   });
   app.get("/dashboard/overview", dashboardOverview);
+  app.get("/dashboard/summary", operationalSummary);
   app.get("/sales-force", async (c) => {
     if (c.req.query("view") === "page") return catalogPage(c, "salesForce");
     const rows = await createDb(c.env.DB).query.salesForce.findMany({
@@ -246,6 +248,7 @@ export function createApp(
           operationalScope(c.get("account").id, t.reporterSalesForceId)
         ),
       with: {
+        outlet: { columns: { id: true, name: true, businessId: true } },
         items: {
           orderBy: (t, { asc }) => [asc(t.productId)],
           with: { product: { columns: { id: true, name: true } } },
@@ -257,6 +260,7 @@ export function createApp(
     return c.json({
       ...toStockReport(row),
       reporter: row.reporterSalesForce,
+      outlet: row.outlet,
       items: row.items.map((item) => ({
         productId: item.productId,
         quantity: item.quantity,
@@ -289,6 +293,7 @@ export function createApp(
         asc(table.id),
       ],
       with: {
+        outlet: { columns: { id: true, name: true, businessId: true } },
         reporterSalesForce: { columns: { id: true, name: true } },
         items: {
           orderBy: (table, { asc }) => [asc(table.productId)],
@@ -319,6 +324,7 @@ export function createApp(
       items: rows.map((report) => ({
         ...toStockReport(report),
         reporter: report.reporterSalesForce,
+        outlet: report.outlet,
         items: report.items.map((item) => ({
           productId: item.productId,
           quantity: item.quantity,

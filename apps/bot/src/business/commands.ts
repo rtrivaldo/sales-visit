@@ -1,7 +1,7 @@
-import { visitReportSummary } from "@sales-visit/contracts";
+import { visitReportSummary, summaryText } from "@sales-visit/contracts";
 import type {
   BotIdentityService,
-  DashboardOverview,
+  OperationalSummary,
   VisitDetail,
   VisitListItem,
   ReadPage,
@@ -72,7 +72,7 @@ function continuation(
 }
 function stock(report: NamedStockReport): string[] {
   return [
-    `LAPORAN STOK ${displayId(report.id)}\nOutlet: ${displayId(report.outletId)}\nPelapor: ${label(report.reporter?.name ?? report.reporterSalesForceId)}\n${report.reportedAt}\nVisit: ${report.visitId ? displayId(report.visitId) : "—"}`,
+    `LAPORAN STOK ${displayId(report.id)}\nOutlet: ${displayId(report.outlet?.businessId ?? report.outletId)}${report.outlet?.name ? ` — ${label(report.outlet.name)}` : ""}\nPelapor: ${label(report.reporter?.name ?? report.reporterSalesForceId)}\n${report.reportedAt}\nVisit: ${report.visitId ? displayId(report.visitId) : "—"}`,
     ...report.items.map(
       (item) =>
         `${label(item.product?.name ?? item.productId)}: ${item.quantity}`
@@ -97,24 +97,12 @@ export function businessCommands(bot: Bot, api: BotIdentityService) {
     }
     return result.data as T;
   }
-  bot.command("dashboard", async (ctx) => {
-    if (ctx.match.trim()) return ctx.reply("Format: /dashboard");
-    const data = await call<DashboardOverview>(ctx, "/dashboard/overview");
-    if (data)
-      await replyBlocks(ctx, [
-        "RINGKASAN AKTIVITAS — 14 hari (WIB)",
-        `Visit: ${data.metrics.visits}\nOutlet dikunjungi: ${data.metrics.outlets}\nSales Force: ${data.metrics.salesForce}\nLaporan stok: ${data.metrics.stockReports}`,
-        ...data.channels.map((row) => `${row.channel}: ${row.count} Visit`),
-        ...data.dailyVisits.map((row) => `${row.date}: ${row.count} Visit`),
-        "Visit terbaru:",
-        ...data.recentVisits.map(
-          (row) =>
-            `${displayId(row.id)} — ${label(row.member?.name ?? row.salesForceId)} → ${label(row.outlet?.name ?? row.outletId)}\n${row.visitedAt}`
-        ),
-      ]);
+  bot.command("summary", async (ctx) => {
+    if (ctx.match.trim()) return ctx.reply("Format: /summary");
+    const data = await call<OperationalSummary>(ctx, "/dashboard/summary");
+    if (data) await ctx.reply(summaryText(data));
   });
   for (const [command, path, filters] of [
-    ["carioutlet", "/outlets", ["q", "offset"]],
     ["produk", "/products", ["q", "offset"]],
     [
       "riwayatvisit",
@@ -274,7 +262,7 @@ export function businessCommands(bot: Bot, api: BotIdentityService) {
         `LAPORAN STOK — Total: ${page.total}`,
         ...page.items.map(
           (report) =>
-            `${displayId(report.id)} · ${report.reportedAt}\nOutlet: ${displayId(report.outletId)} · ${report.items.length} produk\nDetail: /detailstok ${displayId(report.id)}`
+            `${displayId(report.id)} · ${report.reportedAt}\nOutlet: ${displayId(report.outlet?.businessId ?? report.outletId)} · ${report.items.length} produk\nDetail: /detailstok ${displayId(report.id)}`
         ),
         ...(!page.items.length ? ["Tidak ada laporan stok."] : []),
         ...(Number(params.get("offset") ?? 0) + page.items.length < page.total

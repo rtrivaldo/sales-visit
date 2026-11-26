@@ -256,15 +256,15 @@ test("Telegram planning commands through actual BotIdentity binding and disposab
     "roles, inactive users, private chats and spoofed identity",
     async () => {
       for (const id of [4, 5, 6, 999]) {
-        assert.match(await command(id, "/carioutlet q=test"), /Akses ditolak/);
+        assert.match(await command(id, "/outlet missing"), /Akses ditolak/);
         assert.match(await command(id, "/outlet absent"), /Akses ditolak/);
         assert.match(
           await command(id, `/jadwalsales ${enc(sf)}`),
           /Akses ditolak/
         );
       }
-      assert.match(await command(1, "/carioutlet q=test"), /Tidak ada data/);
-      assert.match(await command(2, "/carioutlet q=test"), /Tidak ada data/);
+      assert.match(await command(1, "/outlet missing"), /tidak ditemukan/);
+      assert.match(await command(2, "/outlet missing"), /tidak ditemukan/);
       assert.match(
         await command(2, "/tambahoutlet denied 001 Forbidden"),
         /Akses ditolak/
@@ -281,7 +281,7 @@ test("Telegram planning commands through actual BotIdentity binding and disposab
       for (const id of [1, 2, 4, 5, 6, 999])
         assert.match(await command(id, "/jadwal"), /Akses ditolak/);
       assert.match(await command(3, "/jadwal"), /Tidak ada jadwal/);
-      assert.match(await command(3, "/carioutlet q=test"), /Tidak ada data/);
+      assert.match(await command(3, "/outlet missing"), /tidak ditemukan/);
       assert.match(await command(3, "/outlet absent"), /tidak ditemukan/);
       assert.match(
         await command(3, `/jadwalsales ${enc(sf)}`),
@@ -348,7 +348,7 @@ test("Telegram planning commands through actual BotIdentity binding and disposab
     for (const text of [
       "/outlet",
       "/outlet ~bad=",
-      "/carioutlet a b",
+      "/outlet a b",
       "/editoutlet simple",
       "/tambahoutlet",
       "/tambahoutlet " + "x".repeat(257),
@@ -372,10 +372,7 @@ test("Telegram planning commands through actual BotIdentity binding and disposab
         /Format/
       );
       assert.match(
-        await command(
-          1,
-          `/hapusoutletinternal ${enc(" outlet 😀 + ")} KONFIRMASI`
-        ),
+        await command(1, "/hapusoutlet OUT001 KONFIRMASI"),
         /masih dirujuk/
       );
       assert.match(await command(3, "/jadwal"), /JADWAL SAYA — senin/);
@@ -473,12 +470,7 @@ test("Telegram planning commands through actual BotIdentity binding and disposab
           .bind(" outlet 😀 + ")
       );
       await db.batch(rows);
-      let result = await command(1, "/carioutlet q=unsafe");
-      assert.ok(sent.length <= 2);
-      let next = result.match(/Berikutnya: (\/carioutlet [^\n]+)/)[1];
-      assert.match(next, /q=unsafe offset=10/);
-      result = await command(1, next);
-      assert.match(result, /offset=20/);
+      let result, next;
       for (const [id, initial] of [
         [3, "/jadwal"],
         [2, `/jadwalsales ${enc(sf)} senin`],

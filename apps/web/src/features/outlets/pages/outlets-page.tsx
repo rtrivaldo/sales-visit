@@ -49,7 +49,9 @@ export function OutletsPage() {
           Outlet
         </h1>
         <p className="text-muted-foreground text-sm">
-          Master Outlet dan riwayat operasional sesuai akses Anda.
+          {account?.role === "sales_force"
+            ? "Outlet terjadwal atau pernah Anda laporkan, beserta riwayat milik Anda."
+            : "Master Outlet dan riwayat operasional sesuai akses Anda."}
         </p>
       </div>
       <div className="flex flex-wrap gap-2">
@@ -73,8 +75,8 @@ export function OutletsPage() {
             </Badge>
           </CardTitle>
           <CardDescription>
-            Nama dan ID internal dari master data. Buka detail untuk melihat
-            identitas bisnis dan tindakan sesuai akses.
+            Nama dan ID bisnis Outlet. Buka detail untuk melihat No. RS dan
+            riwayat sesuai akses.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-5">
@@ -117,7 +119,7 @@ export function OutletsPage() {
                       </Link>
                     </TableCell>
                     <TableCell className="break-all whitespace-normal">
-                      {outlet.id}
+                      {outlet.businessId ?? "Belum tersedia"}
                     </TableCell>
                   </TableRow>
                 ))}

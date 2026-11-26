@@ -6,17 +6,17 @@ Every operation is authorized server-side, including follow-up pages.
 
 | Web module             | Telegram workflows                                                      | Access                                                |
 | ---------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------- |
-| Overview               | dashboard: 14-day WIB metrics, daily counts, channels, recent Visits    | A/S; S team only                                      |
-| Users                  | users, pending, approve, reject, setrole, disable, enable               | A, not Demo                                           |
+| Overview               | summary: daily/monthly scoped Visits, stock and activity                | A/S/SF; live scope, demo read-only                    |
+| Users                  | user ID_TELEGRAM, pending, approve, reject, setrole, disable, enable    | A, not Demo                                           |
 | Pre-registration       | templatepengguna, importpengguna with document preview and confirmation | Real A only                                           |
-| SF directory           | salesforce, detailsalesforce                                            | A/S; S team only                                      |
+| SF directory           | detailsalesforce KODE_SF                                                | A/S; S team only                                      |
 | SF master              | tambahsalesforce, editsalesforce, hapussalesforce                       | A, not Demo; Web protected-reference/audit rules      |
-| Outlets                | outlets, carioutlet, outlet; tambah/edit/hapusoutlet                    | Catalog reads A/S/SF as on Web; mutations A, not Demo |
-| Supervisor assignments | supervisors, penugasan, assignsupervisor, unassignsupervisor            | A; Demo reads synthetic records only                  |
+| Outlets                | outlet ID_OUTLET; tambah/edit/hapusoutlet                               | Catalog reads A/S/SF as on Web; mutations A, not Demo |
+| Supervisor assignments | supervisor ID_TELEGRAM, penugasan, assignsupervisor, unassignsupervisor | A; Demo reads synthetic records only                  |
 | Recurring schedules    | jadwal; jadwalsales kode_sf [hari]; tambahjadwal                        | Own SF; A/S monitoring; creation A                    |
 | Visit history          | riwayatvisit, detailvisit                                               | A global, S assigned team, SF own                     |
 | Visit submission       | salesvisit, konfirmasi, batal                                           | Active SF, not Demo                                   |
-| Stock reports          | stockreport; optional entry within Visit wizard                         | Reads scoped by role; submission SF                   |
+| Stock reports          | stockreport, detailstok; Web standalone/linked entry                    | Reads scoped by role; submission SF                   |
 | Demo Mode              | demo, demo_login, demo_status, demo_logout                              | Opt-in local/staging, isolated and read-only          |
 
 The read-only product directory is available through `/produk` (A/S/SF).

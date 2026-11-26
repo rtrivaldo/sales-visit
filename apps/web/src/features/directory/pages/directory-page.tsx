@@ -58,28 +58,32 @@ export function DirectoryPage() {
         </p>
       </div>
       <nav aria-label="Jenis data" className="flex flex-wrap gap-2">
-        {(["sales-force", "products", "stock-reports"] as const).map((kind) => (
-          <Button
-            key={kind}
-            nativeButton={false}
-            variant={search.kind === kind ? "secondary" : "outline"}
-            render={
-              <Link
-                to="/directory"
-                search={{ kind }}
-                aria-current={search.kind === kind ? "page" : undefined}
-              />
-            }
-          >
-            {
+        {(["sales-force", "products", "stock-reports"] as const)
+          .filter(
+            (kind) => account?.role !== "sales_force" || kind !== "sales-force"
+          )
+          .map((kind) => (
+            <Button
+              key={kind}
+              nativeButton={false}
+              variant={search.kind === kind ? "secondary" : "outline"}
+              render={
+                <Link
+                  to="/directory"
+                  search={{ kind }}
+                  aria-current={search.kind === kind ? "page" : undefined}
+                />
+              }
+            >
               {
-                "sales-force": "Sales Force",
-                products: "Produk",
-                "stock-reports": "Laporan stok",
-              }[kind]
-            }
-          </Button>
-        ))}
+                {
+                  "sales-force": "Sales Force",
+                  products: "Produk",
+                  "stock-reports": "Laporan stok",
+                }[kind]
+              }
+            </Button>
+          ))}
         <Button
           nativeButton={false}
           variant="outline"
@@ -96,6 +100,14 @@ export function DirectoryPage() {
             }
           >
             Kelola Sales Force
+          </Button>
+        )}
+        {account?.role === "sales_force" && search.kind === "stock-reports" && (
+          <Button
+            nativeButton={false}
+            render={<Link to="/stock-reports/new" />}
+          >
+            Input laporan stok
           </Button>
         )}
         <OperationalRefresh />
@@ -135,7 +147,7 @@ export function DirectoryPage() {
                 <EmptyTitle>Belum ada data yang sesuai</EmptyTitle>
                 <EmptyDescription>
                   {search.kind === "stock-reports"
-                    ? "Laporan akan tampil setelah tim mencatat stok melalui Telegram Bot."
+                    ? "Laporan yang dikirim melalui Web atau Telegram akan tampil di sini."
                     : search.q
                       ? "Ubah pencarian untuk melihat data lainnya."
                       : search.kind === "sales-force" &&

@@ -594,7 +594,7 @@ test("read and write API against isolated local D1", async (t) => {
         method === "POST" && path === "/visits"
           ? 403
           : method === "POST" && path === "/stock-reports"
-            ? 401
+            ? 403
             : 404
       );
     }

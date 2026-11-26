@@ -83,6 +83,8 @@ async function validateReferences(
       where: (table, { eq }) => eq(table.id, visitId),
     });
     if (!visit) throw new OperationError(404, "Visit not found");
+    if (identity.sessionHash && visit.salesForceId !== identity.salesForceId)
+      throw new OperationError(404, "Visit not found");
     if (visit.outletId !== outletId)
       throw new OperationError(400, "Visit belongs to another Outlet");
   }
@@ -96,16 +98,42 @@ async function validateReferences(
   }
 }
 
-function reportStatements(db: Database, report: StockReport) {
+function reportStatements(
+  db: Database,
+  report: StockReport,
+  guard?: ReturnType<typeof sql>
+) {
   return [
-    db.insert(stockReports).values({
-      ...report,
-      reportedAt: new Date(report.reportedAt),
-    }),
+    guard
+      ? db
+          .insert(stockReports)
+          .select(
+            sql`SELECT ${report.id},${report.outletId},${report.reporterSalesForceId},${report.visitId ?? null},${Date.parse(report.reportedAt)},${report.submissionChannel},${Date.now()} WHERE ${guard}`
+          )
+      : db
+          .insert(stockReports)
+          .values({ ...report, reportedAt: new Date(report.reportedAt) }),
     ...report.items.map((item) =>
-      db.insert(stockReportItems).values({ ...item, stockReportId: report.id })
+      guard
+        ? db
+            .insert(stockReportItems)
+            .select(
+              sql`SELECT ${report.id},${item.productId},${item.quantity} WHERE ${guard}`
+            )
+        : db
+            .insert(stockReportItems)
+            .values({ ...item, stockReportId: report.id })
     ),
   ] as const;
+}
+function webWriteGuard(identity: TrustedIdentity) {
+  return identity.sessionHash
+    ? sql`EXISTS (
+    SELECT 1 FROM web_sessions ws JOIN users u ON u.id=ws.user_id JOIN telegram_identities t ON t.user_id=u.id
+    WHERE ws.token_hash=${identity.sessionHash} AND ws.revoked_at IS NULL AND ws.expires_at>unixepoch('subsec')*1000
+    AND u.status='active' AND u.role='sales_force' AND u.sales_force_id=${identity.salesForceId}
+    AND (SELECT count(*) FROM users WHERE sales_force_id=u.sales_force_id)=1)`
+    : undefined;
 }
 
 async function readReport(db: Database, id: string) {
@@ -176,17 +204,7 @@ export async function createVisit(
       AND d.submission_key = ${telegram.draftKey} AND d.submission_key = ${key}
       AND d.step IN ('submitting', 'submitted')
   )`
-    : identity.sessionHash
-      ? sql`EXISTS (
-      SELECT 1 FROM web_sessions ws JOIN users u ON u.id = ws.user_id
-      JOIN telegram_identities t ON t.user_id = u.id
-      WHERE ws.token_hash = ${identity.sessionHash} AND ws.revoked_at IS NULL
-      AND ws.expires_at > unixepoch('subsec') * 1000
-      AND u.status = 'active' AND u.role = 'sales_force'
-      AND u.sales_force_id = ${identity.salesForceId}
-      AND (SELECT count(*) FROM users WHERE sales_force_id = u.sales_force_id) = 1
-    )`
-      : undefined;
+    : webWriteGuard(identity);
   if (guard) {
     if (
       telegram &&
@@ -248,7 +266,7 @@ export async function createVisit(
         : db
             .insert(visits)
             .values({ ...visit, visitedAt: new Date(visit.visitedAt) }),
-      ...(report ? reportStatements(db, report) : []),
+      ...(report ? reportStatements(db, report, guard) : []),
     ]);
   } catch (error) {
     // A concurrent identical request may have won the primary-key race.
@@ -268,6 +286,12 @@ export async function createStockReport(
   const parsed = createStockReportSchema.safeParse(input);
   if (!parsed.success) throw new OperationError(400, "Invalid request");
   const data = parsed.data;
+  const sessionGuard = webWriteGuard(identity);
+  const guard = sessionGuard
+    ? sql`${sessionGuard} AND (${data.visitId ?? null} IS NULL OR EXISTS(SELECT 1 FROM visits WHERE id=${data.visitId ?? null} AND sales_force_id=${identity.salesForceId}))`
+    : undefined;
+  if (sessionGuard && !(await db.get(sql`SELECT 1 WHERE ${sessionGuard}`)))
+    throw new OperationError(401, "Unauthorized");
   const id = await submissionId(identity, key, "stock-report");
   const report: StockReport = {
     ...data,
@@ -285,10 +309,11 @@ export async function createStockReport(
   if (await retry()) return { data: report, replayed: true };
   await validateReferences(db, identity, data.outletId, data);
   try {
-    await db.batch(reportStatements(db, report));
+    await db.batch(reportStatements(db, report, guard));
   } catch (error) {
     if (await retry()) return { data: report, replayed: true };
     throw error;
   }
+  if (guard && !(await retry())) throw new OperationError(401, "Unauthorized");
   return { data: report, replayed: false };
 }

@@ -10,6 +10,7 @@ import { hashToken } from "./web-auth.ts";
 // to Telegram or RPC callers. Web handlers remain the single source of business rules.
 const reads = new Set([
   "/dashboard/overview",
+  "/dashboard/summary",
   "/sales-force",
   "/outlets",
   "/products",

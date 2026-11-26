@@ -4,8 +4,9 @@ Sales Visit records field-sales Visits and Outlet Stock Reports for a Telkomsel
 distribution workflow with partner Citra Indah. The Web Dashboard provides
 role-based monitoring and administration; the Telegram Bot supports guided Visit
 submission. Web Sales Force reporting now uses the same D1 operation and shared
-validation as Telegram, with review before saving. See
-[Visit reporting, migration and Development release](docs/sales-visit-update.md).
+validation as Telegram, using a dedicated single-submit Web form. The Sales
+workspace includes scoped metrics, schedules, histories and stock reporting.
+See [Sales workspace, safe demo refresh and Development release](docs/sales-workspace.md).
 
 ## Tech stack and workspace
 
@@ -118,16 +119,18 @@ return 401 without a valid Web session. To verify the Bot-to-D1 path, follow the
 
 ## Common commands
 
-| Command                                     | Purpose                                             |
-| ------------------------------------------- | --------------------------------------------------- |
-| `pnpm typecheck`                            | Generate Worker types and check all workspaces      |
-| `pnpm check`                                | Lint and formatting checks                          |
-| `pnpm --filter @sales-visit/api test`       | API/Bot integration tests with disposable local D1  |
-| `pnpm --filter @sales-visit/db test`        | Database tests                                      |
-| `pnpm --filter @sales-visit/contracts test` | Shared validation tests                             |
-| `pnpm test:deployment`                      | Offline deployment-tool tests; no remote operations |
-| `pnpm build:web`                            | Build the dashboard                                 |
-| `pnpm preview:web`                          | Build and preview locally with Wrangler             |
+| Command                                     | Purpose                                                              |
+| ------------------------------------------- | -------------------------------------------------------------------- |
+| `pnpm typecheck`                            | Generate Worker types and check all workspaces                       |
+| `pnpm check`                                | Lint and formatting checks                                           |
+| `pnpm --filter @sales-visit/api test`       | API/Bot integration tests with disposable local D1                   |
+| `pnpm --filter @sales-visit/db test`        | Database tests                                                       |
+| `pnpm --filter @sales-visit/contracts test` | Shared validation tests                                              |
+| `pnpm test:deployment`                      | Offline deployment-tool tests; no remote operations                  |
+| `pnpm build:web`                            | Build the dashboard                                                  |
+| `pnpm db:refresh:demo:local`                | Preview local synthetic data reconciliation (add `--apply` to write) |
+| `pnpm db:refresh:demo:dev`                  | Preview verified Development fixtures (never Production)             |
+| `pnpm preview:web`                          | Build and preview locally with Wrangler                              |
 
 ## Documentation
 

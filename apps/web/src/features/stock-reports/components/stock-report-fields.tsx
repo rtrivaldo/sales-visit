@@ -17,6 +17,7 @@ import type { EntryErrors, StockRow } from "@/features/visits/lib/visit-entry";
 
 export function StockReportFields({
   catalog = defaultProducts,
+  standalone = false,
   enabled,
   rows,
   errors,
@@ -24,6 +25,7 @@ export function StockReportFields({
   onChange,
 }: {
   catalog?: { id: string; name: string }[];
+  standalone?: boolean;
   enabled: boolean;
   rows: StockRow[];
   errors: EntryErrors;
@@ -34,20 +36,24 @@ export function StockReportFields({
     onChange(rows.map((row) => (row.id === id ? { ...row, ...patch } : row)));
   return (
     <FieldSet>
-      <FieldLegend>Laporan Stok (opsional)</FieldLegend>
+      <FieldLegend>
+        {standalone ? "Produk yang dilaporkan" : "Laporan Stok (opsional)"}
+      </FieldLegend>
       <FieldDescription>
         Kunjungan boleh dicatat tanpa laporan stok. Jumlah yang dilaporkan
         adalah pengamatan, bukan stok terkini.
       </FieldDescription>
-      <Button
-        type="button"
-        variant={enabled ? "secondary" : "outline"}
-        aria-pressed={enabled}
-        onClick={onToggle}
-        className="self-start"
-      >
-        {enabled ? "Laporan stok disertakan" : "Sertakan laporan stok"}
-      </Button>
+      {!standalone && (
+        <Button
+          type="button"
+          variant={enabled ? "secondary" : "outline"}
+          aria-pressed={enabled}
+          onClick={onToggle}
+          className="self-start"
+        >
+          {enabled ? "Laporan stok disertakan" : "Sertakan laporan stok"}
+        </Button>
+      )}
       {enabled && (
         <FieldGroup>
           {rows.map((row, index) => (

@@ -32,7 +32,6 @@ export function helpSections(
       section("📅 Monitoring", [
         "/jadwalsales kode_sf [hari] — Jadwal Sales Force.",
         "/outlet ID_OUTLET — Detail Outlet.",
-        "/carioutlet q=NAMA — Cari Outlet (10 per halaman).",
       ])
     );
   if (role === "admin" && !readOnly) {
@@ -54,16 +53,11 @@ export function helpSections(
         "/tambahoutlet — Tambah Outlet.",
         "/editoutlet — Ubah Outlet.",
         "/hapusoutlet — Hapus Outlet yang belum dirujuk.",
-        "/editoutletinternal — Ubah Outlet berdasarkan ID internal.",
-        "/hapusoutletinternal — Hapus Outlet berdasarkan ID internal.",
         "/tambahjadwal — Tambah rencana kunjungan.",
       ])
     );
   }
   if (role === "admin" || role === "supervisor") {
-    sections.push(
-      section("📊 Dashboard", ["/dashboard — Ringkasan aktivitas."])
-    );
     sections.push(
       section("👨‍💼 Sales Force", [
         "/detailsalesforce KODE_SF — Detail Sales Force.",
@@ -91,15 +85,13 @@ export function helpSections(
       ])
     );
   if (role) {
+    sections.push(section("📊 Ringkasan", ["/summary — Ringkasan aktivitas."]));
     sections.push(
       section("📦 Produk", ["/produk q=NAMA — Cari produk (10 per halaman)."])
     );
     if (role === "sales_force")
       sections.push(
-        section("🏪 Outlet", [
-          "/carioutlet q=NAMA — Cari Outlet (10 per halaman).",
-          "/outlet ID_OUTLET — Detail Outlet.",
-        ])
+        section("🏪 Outlet", ["/outlet ID_OUTLET — Detail Outlet."])
       );
     sections.push(
       section("📋 Riwayat Kunjungan", [
