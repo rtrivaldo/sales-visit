@@ -191,7 +191,19 @@ test("audited supervisor edit is one direct conflict, not 827; frozen shared anc
     output: (s) => lines.push(s),
   });
   assert.equal(verify.status, "completely_blocked");
-  assert.ok(lines.some((s) => s.includes("Previous write outcome: uncertain")));
+  assert.equal(verify.sql, "");
+  assert.equal(verify.pendingChanges, 0);
+  assert.equal(verify.receiptChanges, 0);
+  assert.equal(verify.actions.length, 821);
+  assert.equal(verify.conflicts.length, 8);
+
+  assert.ok(
+    lines.some((s) =>
+      s.includes("All eligible fixtures and required provenance verified.")
+    )
+  );
+
+  assert.ok(lines.some((s) => s.includes("Protected conflicts remain")));
   assert.deepEqual(db.prepare("PRAGMA foreign_key_check").all(), []);
 });
 

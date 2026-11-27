@@ -251,8 +251,12 @@ export async function refresh({
     );
     const direct = plan.conflicts.filter((c) => c.kind === "direct");
     const propagated = plan.conflicts.filter((c) => c.kind === "propagated");
+    const reconciliationStatus =
+      !plan.sql && plan.conflicts.length && plan.actions.length
+        ? "up_to_date_with_protected_conflicts"
+        : plan.status;
     output(
-      `Reconciliation: ${plan.status}\nDirect conflicts: ${direct.length}; propagated conflicts: ${propagated.length}\nEligible records: ${plan.actions.length}; unchanged records: ${plan.actions.filter((r) => r.action === "unchanged").length}; pending business changes: ${plan.pendingChanges}; pending provenance writes: ${plan.receiptChanges}\nFrozen verified anchors: ${plan.actions.filter((r) => r.protected).length}\nProvenance before: ${plan.provenance.verified} matching; ${plan.provenance.missing} missing; ${plan.provenance.mismatched} mismatched; ${plan.provenance.independentlyVerified} independently fingerprinted.`
+      `Reconciliation: ${reconciliationStatus}\nDirect conflicts: ${direct.length}; propagated conflicts: ${propagated.length}\nEligible records: ${plan.actions.length}; unchanged records: ${plan.actions.filter((r) => r.action === "unchanged").length}; pending business changes: ${plan.pendingChanges}; pending provenance writes: ${plan.receiptChanges}\nFrozen verified anchors: ${plan.actions.filter((r) => r.protected).length}\nProvenance before: ${plan.provenance.verified} matching; ${plan.provenance.missing} missing; ${plan.provenance.mismatched} mismatched; ${plan.provenance.independentlyVerified} independently fingerprinted.`
     );
     output(
       `Operational/identity dependency rows: ${Object.values(plan.dependencyCounts).reduce((sum, n) => sum + n, 0)}${
@@ -396,9 +400,13 @@ export async function refresh({
       );
     if (verifyOnly)
       output(
-        plan.sql || plan.conflicts.length
-          ? "Previous write outcome: uncertain/not established by current state; expected fixtures have not fully converged. No writes performed."
-          : "Current expected fixture state and required provenance verified. This does not attribute an earlier transaction."
+        plan.sql
+          ? "Eligible fixture changes remain pending. No writes performed."
+          : plan.conflicts.length
+            ? plan.actions.length
+              ? "All eligible fixtures and required provenance verified. Protected conflicts remain. No writes required for eligible records."
+              : "Verification blocked: no eligible fixtures. Protected conflicts remain. No writes performed."
+            : "Current expected fixture state and required provenance verified."
       );
     for (const table of tables) {
       const rows = plan.actions.filter((a) => a.table === table),
@@ -423,7 +431,13 @@ export async function refresh({
       output(`${plan.conflicts.length - 20} additional conflicts skipped.`);
     output(
       plan.conflicts.length
-        ? "Refresh remains blocked by unresolved conflicts (even if SQL is zero). Review root conflicts and dependency chains; preserve manual edits. Run --verify-only first. Use --repair-provenance only with independently verified evidence; there is no force-refresh."
+        ? !plan.actions.length
+          ? "Refresh remains blocked by unresolved conflicts (even if SQL is zero). No eligible fixtures."
+          : apply
+            ? "Eligible reconciliation verified successfully. Protected conflicts remain unchanged."
+            : plan.sql
+              ? "Eligible changes are available. Protected conflicts will be skipped."
+              : "All eligible fixtures are up to date. Protected conflicts remain; no eligible database writes required."
         : repairProvenance
           ? apply
             ? "Provenance-only recovery verified. Business data was not refreshed. Run a normal dry-run next."
@@ -502,8 +516,12 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
         ? "sales-visit-dev"
         : undefined,
     });
-    if (plan.conflicts.length || (flags.includes("--verify-only") && plan.sql))
+    if (
+      plan.conflicts.length ||
+      (flags.includes("--verify-only") && plan.sql)
+    ) {
       process.exitCode = 2;
+    }
   } catch (error) {
     console.error(describeRefreshFailure(error));
     process.exitCode = 1;
