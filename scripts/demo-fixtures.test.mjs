@@ -9,6 +9,7 @@ import {
   snapshotQueries,
   reconcile,
 } from "./demo-fixtures.mjs";
+import { preflightReconciliation } from "./demo-refresh-preflight.mjs";
 test("platform-independent demo fixture generation and atomic reconciliation", (t) => {
   const now = Date.parse("2027-04-01T00:00:00+07:00"),
     fixture = fixtureState(now),
@@ -32,7 +33,11 @@ test("platform-independent demo fixture generation and atomic reconciliation", (
           .map((r) => ({ ...r })),
       ])
     );
-  const plan = reconcile(fixture, read());
+  const before = read();
+  const plan = reconcile(fixture, before);
+  const preflight = preflightReconciliation(fixture, before, plan);
+  assert.equal(preflight.boundParameters, 0);
+  assert.ok(preflight.maxStatementBytes < 100000);
   assert.equal(plan.conflicts.length, 0);
   db.exec("BEGIN");
   db.exec(plan.sql);

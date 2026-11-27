@@ -14,6 +14,8 @@ export const tables = [
 ];
 export const primary = {
   sales_force_supervisors: ["sales_force_id"],
+  telegram_identities: ["user_id"],
+  telegram_visit_drafts: ["user_id"],
   stock_report_items: ["stock_report_id", "product_id"],
 };
 export const keyOf = (table, row) =>
@@ -21,9 +23,26 @@ export const keyOf = (table, row) =>
 export const canonical = (row) =>
   JSON.stringify(
     Object.fromEntries(
-      Object.entries(row).toSorted(([a], [b]) => a.localeCompare(b))
+      Object.entries(row).toSorted(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
     )
   );
+/** Receipts are full, typed row fingerprints, not raw JSON byte fingerprints.
+ * Key order/whitespace may differ across writers; numbers, null and strings must
+ * NOT be coerced. SQLite already materializes fixture defaults/integers for us. */
+export function receiptMatches(receipt, row) {
+  if (typeof receipt !== "string") return false;
+  try {
+    const parsed = JSON.parse(receipt);
+    return (
+      parsed !== null &&
+      !Array.isArray(parsed) &&
+      typeof parsed === "object" &&
+      canonical(parsed) === canonical(row)
+    );
+  } catch {
+    return false;
+  }
+}
 export const literal = (value) =>
   value === null
     ? "NULL"
@@ -175,15 +194,36 @@ export function snapshotQueries(fixture) {
   }));
 }
 
-export function reconcile(fixture, snapshot) {
+export function reconcile(
+  fixture,
+  snapshot,
+  { repairProvenance = false, evidenceFixture } = {}
+) {
+  for (const query of snapshotQueries(fixture))
+    if (!Array.isArray(snapshot[query.table]))
+      throw new Error("Incomplete dependency snapshot");
   const receipts = new Map(
     (snapshot.demo_fixture_state ?? []).map((r) => [
       `${r.table_name}:${r.record_key}`,
       r.record_json,
     ])
   );
+  const fixtureKeys = new Set(
+    tables.flatMap((table) =>
+      fixture.desired[table].map((row) => `${table}:${keyOf(table, row)}`)
+    )
+  );
+  const dependencyCounts = {};
   const eligible = new Map(),
-    conflicts = [];
+    conflicts = [],
+    owned = new Set(),
+    protectedRows = new Map();
+  const provenance = {
+    verified: 0,
+    missing: 0,
+    mismatched: 0,
+    independentlyVerified: 0,
+  };
   const current = new Map(
     tables.map((table) => [
       table,
@@ -211,11 +251,31 @@ export function reconcile(fixture, snapshot) {
           legacy[field] = null;
         variants.push(legacy);
       }
-      const verified =
-        !existing ||
-        canonical(existing) === canonical(target) ||
-        receipts.get(`${table}:${key}`) === canonical(existing) ||
-        variants.some((row) => canonical(row) === canonical(existing));
+      const id = `${table}:${key}`;
+      if (repairProvenance && !existing) continue;
+      const historical = evidenceFixture?.desired[table].find(
+        (r) => keyOf(table, r) === key
+      );
+      // Historical evidence is opt-in, reproducible and full-row exact. Never
+      // infer ownership from timestamps/prefixes or a partially matching row.
+      if (repairProvenance && historical) variants.push(historical);
+      const independent =
+        existing &&
+        (canonical(existing) === canonical(target) ||
+          variants.some((row) => canonical(row) === canonical(existing)));
+      const receipt = receipts.get(id);
+      const validReceipt = existing && receiptMatches(receipt, existing);
+      if (existing) {
+        provenance[
+          validReceipt
+            ? "verified"
+            : receipt === undefined
+              ? "missing"
+              : "mismatched"
+        ]++;
+        if (independent) provenance.independentlyVerified++;
+      }
+      const verified = !existing || independent || validReceipt;
       const collision =
         table === "outlets"
           ? (snapshot.outlets ?? []).some(
@@ -235,12 +295,25 @@ export function reconcile(fixture, snapshot) {
         (snapshot.telegram_identities ?? []).some(
           (t) => t.user_id === target.id
         );
-      if (verified && !linked && !collision)
-        eligible.set(`${table}:${key}`, { table, key, target, existing });
-      else
+      if (verified && !linked && !collision) {
+        owned.add(id);
+        eligible.set(id, {
+          table,
+          key,
+          target: repairProvenance ? existing : target,
+          existing,
+        });
+      } else
         conflicts.push({
           table,
           key,
+          kind: "direct",
+          root: id,
+          fields: existing
+            ? Object.keys(target).filter(
+                (field) => existing[field] !== target[field]
+              )
+            : [],
           reason: collision
             ? "Case-insensitive business-code collision"
             : linked
@@ -253,6 +326,7 @@ export function reconcile(fixture, snapshot) {
       throw new Error("Incomplete dependency snapshot");
     const refs = [];
     const add = (t, ...values) => refs.push(`${t}:${JSON.stringify(values)}`);
+    if (table === "telegram_identities") add("users", row.user_id);
     if (table === "users" && row.sales_force_id)
       add("sales_force", row.sales_force_id);
     if (table === "sales_force_supervisors") {
@@ -295,38 +369,115 @@ export function reconcile(fixture, snapshot) {
     }
     return refs;
   };
-  // A real/ambiguous touching record blocks its fixture parents. Then propagate
-  // blocks both ways through the fixture graph; never rewrite a mixed component.
+  const blocked = new Map(conflicts.map((c) => [`${c.table}:${c.key}`, c]));
+  const protect = (id, cause) => {
+    if (fixtureKeys.has(id) && !protectedRows.has(id))
+      protectedRows.set(id, cause);
+  };
+  // Ownership does not disappear when a verified row is blocked. Treating such
+  // rows as real data was the old bidirectional graph-poisoning defect.
+  for (const table of [
+    ...tables,
+    "telegram_identities",
+    "access_audit",
+    "supervisor_assignment_audit",
+    "outlet_master_audit",
+    "sales_force_master_audit",
+    "telegram_visit_drafts",
+  ])
+    for (const row of snapshot[table]) {
+      const id = `${table}:${keyOf(table, row)}`;
+      if (!owned.has(id)) {
+        const parents = references(table, row).filter((parent) =>
+          fixtureKeys.has(parent)
+        );
+        if (!blocked.has(id) && parents.length)
+          dependencyCounts[table] = (dependencyCounts[table] ?? 0) + 1;
+        const cause = blocked.has(id)
+          ? { via: id, root: id, reason: "Blocked fixture dependency" }
+          : {
+              via: `external:${table}`,
+              root: `external:${table}`,
+              reason: "Non-fixture dependency",
+            };
+        for (const parent of parents) protect(parent, cause);
+      }
+    }
   let changed = true;
   while (changed) {
     changed = false;
-    const block = (id, reason) => {
+    const block = (id, reason, cause) => {
       const row = eligible.get(id);
-      if (row) {
-        eligible.delete(id);
-        conflicts.push({ table: row.table, key: row.key, reason });
-        changed = true;
-      }
+      if (!row) return;
+      eligible.delete(id);
+      const conflict = {
+        table: row.table,
+        key: row.key,
+        kind: cause.via.startsWith("external:") ? "direct" : "propagated",
+        reason,
+        fields: [],
+        via: cause.via,
+        root: cause.root,
+      };
+      blocked.set(id, conflict);
+      conflicts.push(conflict);
+      // Only persisted relationships can protect a parent; an absent blocked
+      // insert must not contaminate an unrelated shared fixture.
+      if (row.existing)
+        for (const parent of references(row.table, row.existing))
+          protect(parent, {
+            via: id,
+            root: cause.root,
+            reason: "Blocked fixture dependency",
+          });
+      changed = true;
     };
-    for (const table of [
-      ...tables,
-      "access_audit",
-      "supervisor_assignment_audit",
-      "outlet_master_audit",
-      "sales_force_master_audit",
-      "telegram_visit_drafts",
-    ])
-      for (const row of snapshot[table] ?? []) {
-        if (!eligible.has(`${table}:${keyOf(table, row)}`))
-          for (const parent of references(table, row))
-            block(parent, "Non-fixture dependency");
+    for (const [id, row] of eligible) {
+      const protection = protectedRows.get(id);
+      // A verified, byte-for-byte unchanged parent is a frozen anchor, not a
+      // reason to block every sibling sharing that SF, Outlet or Product.
+      if (
+        protection &&
+        (!row.existing || canonical(row.existing) !== canonical(row.target))
+      ) {
+        block(id, protection.reason, protection);
+        continue;
       }
-    for (const [id, row] of eligible)
-      for (const parent of references(row.table, row.target))
-        if (!eligible.has(parent)) block(id, "Conflicting parent");
+      const previousParents = row.existing
+        ? references(row.table, row.existing)
+        : [];
+      for (const parent of references(row.table, row.target)) {
+        if (!eligible.has(parent)) {
+          block(id, "Conflicting parent", {
+            via: fixtureKeys.has(parent)
+              ? parent
+              : `external:${parent.split(":")[0]}`,
+            root:
+              blocked.get(parent)?.root ??
+              (fixtureKeys.has(parent)
+                ? parent
+                : `external:${parent.split(":")[0]}`),
+          });
+          break;
+        }
+        if (protectedRows.has(parent) && !previousParents.includes(parent)) {
+          block(id, "New relationship to protected fixture", {
+            via: parent,
+            root: protectedRows.get(parent).root,
+          });
+          break;
+        }
+      }
+    }
   }
   const actions = [...eligible.values()].map((r) => ({
     ...r,
+    protected: protectedRows.has(`${r.table}:${r.key}`),
+    receiptTarget: protectedRows.has(`${r.table}:${r.key}`)
+      ? (receipts.get(`${r.table}:${r.key}`) ?? null)
+      : receiptMatches(receipts.get(`${r.table}:${r.key}`), r.target)
+        ? receipts.get(`${r.table}:${r.key}`)
+        : canonical(r.target),
     action: !r.existing
       ? "insert"
       : canonical(r.existing) === canonical(r.target)
@@ -362,7 +513,10 @@ export function reconcile(fixture, snapshot) {
             ","
           )} WHERE ${(primary[row.table] ?? ["id"]).map((k) => `${k} IS ${literal(row.target[k])}`).join(" AND ")}`
       );
-    if (receipts.get(`${row.table}:${row.key}`) !== canonical(row.target))
+    if (
+      !row.protected &&
+      !receiptMatches(receipts.get(`${row.table}:${row.key}`), row.target)
+    )
       writes.push(
         `INSERT INTO demo_fixture_state(table_name,record_key,record_json) VALUES (${literal(row.table)},${literal(row.key)},${literal(canonical(row.target))}) ON CONFLICT(table_name,record_key) DO UPDATE SET record_json=excluded.record_json`
       );
@@ -370,6 +524,22 @@ export function reconcile(fixture, snapshot) {
   return {
     actions,
     conflicts,
+    provenance,
+    protections: [...protectedRows].map(([id, cause]) => ({ id, ...cause })),
+    dependencyCounts,
+    pendingChanges: actions.filter((r) => r.action !== "unchanged").length,
+    receiptChanges: actions.filter(
+      (r) =>
+        !r.protected &&
+        !receiptMatches(receipts.get(`${r.table}:${r.key}`), r.target)
+    ).length,
+    status: conflicts.length
+      ? writes.length
+        ? "partially_blocked"
+        : "completely_blocked"
+      : writes.length
+        ? "changes_available"
+        : "up_to_date",
     sql: writes.length ? [...assertions, ...writes].join(";\n") + ";" : "",
   };
 }

@@ -278,9 +278,12 @@ Safety controls:
    and exact Development confirmation. Secrets are never command arguments/output.
 4. Candidate keys, alternate business-code collisions and touching relationships are
    inspected, including users, reports/items, schedules, audit references and drafts.
-   Ambiguous or mixed real/demo dependency components are skipped conservatively;
-   the command reports counts and bounded conflict explanations, never silently
-   adopts them. Shared products require exact synthetic proof.
+   Ambiguous rows and affected mutations are skipped conservatively. Independently
+   verified unchanged parents may serve as frozen shared anchors (no business or
+   receipt writes); existing verified children retaining those relationships may
+   refresh, but new links to protected anchors are refused. Ownership is distinct
+   from eligibility, so a blocked fixture does not become operational data and
+   poison unrelated branches. Shared products still require exact synthetic proof.
 5. Snapshot count/full-row assertions precede all mutations in the same atomic
    Wrangler local D1 batch / remote D1 file import. Concurrent inserts, identity
    changes, edited fingerprints or new dependencies abort the batch rather than
@@ -295,9 +298,11 @@ Safety controls:
    prints a completion success message. Ephemeral SQL files contain fixtures, not
    credentials, and are removed after execution.
 
-A conflict can block multiple connected fixture records; this is deliberate safety,
-not permission to delete those records. Review provenance/dependencies manually.
-No arbitrary `demo-*` record, custom demo persona or edited report is overwritten.
+A conflict can block affected dependencies, but verified frozen parents no longer
+propagate conflicts to every unrelated sibling. Direct roots, propagated conflicts,
+dependency chains and provenance counts are reported separately. Zero SQL with
+unresolved conflicts is blocked, not success (CLI exit 2). Review manually; no
+arbitrary `demo-*` record, custom demo persona or edited report is overwritten.
 
 ## Exact local commands
 
@@ -343,6 +348,13 @@ Both refresh scripts use Node filesystem/path/process APIs, not POSIX shell env
 assignments, `/dev/null`, or platform-specific dependency binaries. Native Windows
 and WSL must use separate node_modules trees; sharing Linux symlinks with Windows
 Node is unsupported by the existing dependency installation.
+
+For the verified November 27 reassignment/import findings, exact read-only commands,
+Wrangler 4.156.2 stdout handling, conflict states and explicitly confirmed receipt-only
+recovery, see [Demo refresh diagnostics](demo-refresh-diagnostics.md). Start with
+`pnpm db:refresh:demo:dev --verify-only`. An unparseable successful-process response
+triggers read-only verification, never another write. The audited manual assignment
+remains protected; no provenance repair is needed for that incident.
 
 ## Verification and limitations
 

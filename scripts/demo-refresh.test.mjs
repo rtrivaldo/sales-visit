@@ -11,6 +11,7 @@ import {
   reconcile,
   canonical,
 } from "./demo-fixtures.mjs";
+import { sqlStatements } from "./demo-refresh-preflight.mjs";
 import { refresh, validateRefreshTarget } from "./demo-refresh.mjs";
 const now = Date.parse("2027-03-15T08:00:00Z"),
   fixture = fixtureState(now);
@@ -49,17 +50,13 @@ const snapshot = (db) =>
 function execute(db, sql) {
   db.exec("BEGIN");
   try {
-    const rows = sql
-      .split(";")
-      .map((s) => s.trim())
-      .filter(Boolean)
-      .map((s) => {
-        const p = db.prepare(s);
-        if (p.columns().length)
-          return { success: true, results: p.all().map((r) => ({ ...r })) };
-        p.run();
-        return { success: true, results: [] };
-      });
+    const rows = sqlStatements(sql).map((s) => {
+      const p = db.prepare(s);
+      if (p.columns().length)
+        return { success: true, results: p.all().map((r) => ({ ...r })) };
+      p.run();
+      return { success: true, results: [] };
+    });
     db.exec("COMMIT");
     return rows;
   } catch (error) {
@@ -161,10 +158,20 @@ test("dry-run does not write; conflicting fingerprints, shared products and Tele
     db.prepare("SELECT name FROM products WHERE id='demo-prd-01'").get().name,
     "Shared real product"
   );
-  assert.equal(
+  // A conflicted shared Product freezes its linked reports, not unrelated
+  // unlinked Visits merely sharing the same SF/Outlet.
+  assert.notEqual(
     db.prepare("SELECT total_purchase FROM visits ORDER BY id LIMIT 1").get()
       .total_purchase,
     before
+  );
+  assert.ok(
+    plan.actions.some((a) => a.table === "visits" && a.action === "update")
+  );
+  assert.ok(
+    plan.conflicts.some(
+      (c) => c.kind === "propagated" && c.root.startsWith("products:")
+    )
   );
 });
 test("real dependencies and concurrent changes never get overwritten", (t) => {
@@ -173,7 +180,16 @@ test("real dependencies and concurrent changes never get overwritten", (t) => {
     "INSERT INTO visits(id,outlet_id,sales_force_id,visited_at,submission_channel) VALUES ('real-visit','demo-out-01','demo-sf-01',1,'web')"
   );
   const plan = reconcile(fixture, snapshot(db));
-  assert.ok(plan.conflicts.some((r) => r.reason === "Non-fixture dependency"));
+  assert.ok(
+    plan.protections.some((r) => r.reason === "Non-fixture dependency")
+  );
+  const sf = plan.actions.find(
+    (a) => a.table === "sales_force" && a.target.id === "demo-sf-01"
+  );
+  assert.equal(sf.protected, true);
+  assert.equal(sf.action, "unchanged");
+  assert.equal(sf.receiptTarget, null);
+  assert.ok(plan.conflicts.some((c) => c.root === "external:visits"));
   const before = canonical(
     db.prepare("SELECT * FROM visits WHERE id='real-visit'").get()
   );
@@ -259,6 +275,14 @@ test("target protection, migration prerequisite and explicit remote confirmation
   assert.throws(() =>
     validateRefreshTarget("dev", dev, prod, { WRANGLER_ENV: "production" })
   );
+  for (const key of [
+    "CLOUDFLARE_API_BASE_URL",
+    "CF_API_BASE_URL",
+    "WRANGLER_API_ENVIRONMENT",
+  ])
+    assert.throws(() =>
+      validateRefreshTarget("dev", dev, prod, { [key]: "unapproved" })
+    );
   const changed = structuredClone(dev);
   changed.d1_databases[0].database_id = prod.d1_databases[0].database_id;
   assert.throws(() => validateRefreshTarget("dev", changed, prod, {}));
